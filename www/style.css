@@ -1,0 +1,27 @@
+
+body {
+  font-family: 'Lato', sans-serif;
+}
+
+.container-fluid {
+  max-width: 1200px;
+  margin: auto;
+}
+
+.leaflet-control-layers-list::before {
+  content: 'Basemap:';
+  font-weight: bold;
+}
+
+.leaflet-control-layers-overlays::before {
+  content: 'Layers:';
+  font-weight: bold;
+}
+
+.leaflet-container {
+  max-height: min(90vh, 120vw);
+}
+
+a, a:hover, a:focus {
+  color: #48a67b;
+}

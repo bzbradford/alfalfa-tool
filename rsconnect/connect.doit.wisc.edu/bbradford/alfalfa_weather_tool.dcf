@@ -1,0 +1,13 @@
+name: alfalfa_weather_tool
+title: Alfalfa weather tool
+username: bbradford
+account: bbradford
+server: connect.doit.wisc.edu
+hostUrl: https://connect.doit.wisc.edu/__api__
+appId: 306
+bundleId: 1891
+url: https://connect.doit.wisc.edu/alfalfa-tool/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: .RData|.Rprofile
