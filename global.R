@@ -158,15 +158,15 @@ fill_weather <- function() {
     arrange(lat, lng, date) %>%
     mutate(year = year(date), yday = yday(date), .after = date) %>%
     mutate(gdd41cum = cumsum(gdd41), .by = c(lat, lng, year))
-  weather %>% write_feather("weather.feather")
+  weather %>% write_feather("data/weather.feather")
 }
 
 
 # Initialize data ----
 
-counties <- read_rds("counties")
-if (!exists("climate")) climate <- read_rds("climate.rds")
-if (file.exists("weather.feather")) weather <- read_feather("weather.feather")
+counties <- read_rds("data/counties.rds")
+if (!exists("climate")) climate <- read_rds("data/climate.rds")
+if (file.exists("data/weather.feather")) weather <- read_feather("data/weather.feather")
 
 # should move this to the app at some point with a notification saying its loading data
 fill_weather()
