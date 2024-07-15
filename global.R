@@ -1,24 +1,18 @@
-
+#- global.R -#
 
 suppressMessages({
-  # core
   # library(rlang) # walrus operator
-  # library(markdown) # includeMarkdown
   library(tidyverse) # core
   library(sf) # spatial
   library(feather) # file storage
-
-  # shiny
   library(shiny)
   library(shinyBS) # bscollapse
   library(shinyjs) # javascript
   library(shinythemes) # theme
-  library(shinyWidgets) # radioGroupButtons
+  # library(shinyWidgets) # radioGroupButtons
   library(htmltools) # tagList
   library(shinycssloaders) # withSpinner
-
-  # interactive
-  library(DT) # data tables
+  # library(DT) # data tables
   library(leaflet) # map
   library(leaflet.extras) # map JS buttons
   library(plotly) # plots
@@ -124,8 +118,11 @@ get_weather_grid <- function(date = yesterday()) {
     data %>%
       fix_coords() %>%
       select(lat, lng, date, min_temp, max_temp, frost, freeze = freezing) %>%
-      mutate(date = as_date(date)) %>%
-      mutate(gdd41 = calc_gdd(min_temp, max_temp, 41, 86))
+      mutate(
+        date = as_date(date),
+        gdd41 = calc_gdd(min_temp, max_temp, 41, 86),
+        gdd50 = calc_gdd(min_temp, max_temp, 50, 86)
+      )
   } else {
     message(str_glue("Failed to retrieve weather data for {date}"))
     tibble()
@@ -156,8 +153,12 @@ fill_weather <- function() {
   }
   weather <<- weather %>%
     arrange(lat, lng, date) %>%
-    mutate(year = year(date), yday = yday(date), .after = date) %>%
-    mutate(gdd41cum = cumsum(gdd41), .by = c(lat, lng, year))
+    mutate(year = year(date), .after = date) %>%
+    mutate(
+      gdd41cum = cumsum(gdd41),
+      gdd50cum = cumsum(gdd50),
+      .by = c(lat, lng, year)
+    )
   weather %>% write_feather("data/weather.feather")
 }
 
@@ -171,26 +172,3 @@ if (file.exists("data/weather.feather")) weather <- read_feather("data/weather.f
 # should move this to the app at some point with a notification saying its loading data
 fill_weather()
 
-
-# Test map ----
-
-# test_wx <- weather %>%
-#   filter(date > as_date("2024-6-1")) %>%
-#   filter(date == sample(date, 1))
-#
-# test_wx %>%
-#   leaflet() %>%
-#   addProviderTiles(providers$CartoDB.Positron) %>%
-#   addRectangles(
-#     lat1 = ~lat - .05,
-#     lat2 = ~lat + .05,
-#     lng1 = ~lng - .05,
-#     lng2 = ~lng + .05,
-#     weight = .5,
-#     opacity = .1,
-#     color = "black",
-#     fillOpacity = .75,
-#     # fillColor = ~pal(gdd41cum),
-#     fillColor = ~colorNumeric("viridis", gdd41cum)(gdd41cum),
-#     label = ~round(gdd41cum)
-#   )

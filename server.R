@@ -10,24 +10,30 @@ server <- function(input, output, session) {
       "Min daily temp (F)" = "min_temp",
       "Daily GDD41 accumulation" = "gdd41",
       "Cumulative GDD41 since Jan 1" = "gdd41cum",
-      "Frost this day (<32F)" = "frost",
-      "Hard freeze this day (<28F)" = "freeze"
+      "Daily GDD50 accumulation" = "gdd50",
+      "Cumulative GDD50 since Jan 1" = "gdd50cum",
+      "Frost (<32F) this day" = "frost",
+      "Hard freeze (<28F) this day" = "freeze"
     ),
     climate = list(
       "Mean daily max temp (F)" = "max_temp",
       "Mean daily min temp (F)" = "min_temp",
       "Mean daily GDD41" = "gdd41",
       "Mean cumulative GDD41" = "gdd41cum",
+      "Mean daily GDD50" = "gdd50",
+      "Mean cumulative GDD50" = "gdd50cum",
       "Mean probability of frost on day" = "frost",
       "Mean probability of hard freeze on day" = "freeze",
-      "Cumul. prob. of frost" = "frost_by",
-      "Cumul. prob. of hard freeze" = "freeze_by"
+      "Cumulative probability of frost" = "frost_by",
+      "Cumulative probability of hard freeze" = "freeze_by"
     ),
     comparison = list(
       "Max daily temp vs climate average (F)" = "max_temp",
       "Min daily temp vs climate average (F)" = "min_temp",
       "Daily GDD41 vs climate average" = "gdd41",
-      "Cumul. GDD41 vs climate average" = "gdd41cum"
+      "Cumul. GDD41 vs climate average" = "gdd41cum",
+      "Daily GDD50 vs climate average" = "gdd50",
+      "Cumul. GDD50 vs climate average" = "gdd50cum"
     )
   )
 
@@ -37,8 +43,8 @@ server <- function(input, output, session) {
   ## grid_data() ----
   grid_data <- reactiveVal()
 
-  ## selected_pt() ----
-  selected_pt <- reactiveVal()
+  ## selected_grid() ----
+  selected_grid <- reactiveVal()
 
 
   # Map UI ----
@@ -209,7 +215,7 @@ server <- function(input, output, session) {
       addBasemaps() %>%
       addMapPane("counties", 410) %>%
       addMapPane("grid", 420) %>%
-      addMapPane("selected_pt", 430) %>%
+      addMapPane("selected_grid", 430) %>%
       addLayersControl(
         baseGroups = basemaps$label,
         overlayGroups = unlist(layers, use.names = F),
@@ -413,8 +419,10 @@ server <- function(input, output, session) {
 
   observeEvent(input$map_shape_click, {
     id <- input$map_shape_click$id
+    req(id)
+    if (id == "selected") return()
     coords <- as.numeric(str_split_1(id, " "))
-    selected_pt(tibble(lat = coords[1], lng = coords[2]))
+    selected_grid(tibble(lat = coords[1], lng = coords[2]))
   })
 
 
@@ -422,22 +430,23 @@ server <- function(input, output, session) {
 
   observe({
     map <- leafletProxy("map")
-    if (is.null(selected_pt())) {
-      map %>% clearGroup("selected_pt")
+    if (is.null(selected_grid())) {
+      map %>% removeShape("selected_grid")
     } else {
       pt <- grid_data() %>%
-        filter(lat == selected_pt()$lat, lng == selected_pt()$lng)
+        filter(lat == selected_grid()$lat, lng == selected_grid()$lng)
       map %>%
-        clearGroup("selected_pt") %>%
+        removeShape("selected_grid") %>%
         addRectangles(
           data = pt,
           lat1 = ~lat - .05, lat2 = ~lat + .05,
           lng1 = ~lng - .05, lng2 = ~lng + .05,
+          group = layers$grid,
+          layerId = "selected",
           weight = .5, opacity = 1, color = "black",
           fillOpacity = 0,
           label = ~shiny::HTML(label),
-          group = "selected_pt",
-          options = pathOptions(pane = "selected_pt")
+          options = pathOptions(pane = "selected_grid")
         )
     }
   })
@@ -445,8 +454,8 @@ server <- function(input, output, session) {
 
   # observers ----
   # observe({
-  #   message("selected_pt()")
-  #   print(selected_pt())
+  #   message("selected_grid()")
+  #   print(selected_grid())
   # })
   #
   # observe({
