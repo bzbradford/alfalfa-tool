@@ -25,3 +25,13 @@ body {
 a, a:hover, a:focus {
   color: #48a67b;
 }
+
+.date-btns {
+  display: inline-flex;
+  width: 100%;
+  gap: 5px;
+}
+
+.date-btns > button {
+  padding: 2px 5px;
+}

@@ -31,6 +31,23 @@ yesterday <- function() Sys.Date() - 1
 
 # Functions ----
 
+make_date <- function(y, m, d) {
+  as_date(paste(y, m, d, sep = "-"))
+}
+
+start_of_year <- function(d = Sys.Date()) {
+  make_date(year(d), 1, 1)
+}
+
+end_of_year <- function(d = Sys.Date()) {
+  make_date(year(d), 12, 31)
+}
+
+clamp <- function(x, left, right) {
+  if (is.null(x)) return()
+  min(max(left, x), right)
+}
+
 calc_gdd <- function(tmin, tmax, base, upper) {
   mapply(gdd_sine, tmin, tmax, base, upper)
 }
@@ -169,6 +186,4 @@ counties <- read_rds("data/counties.rds")
 if (!exists("climate")) climate <- read_rds("data/climate.rds")
 if (file.exists("data/weather.feather")) weather <- read_feather("data/weather.feather")
 
-# should move this to the app at some point with a notification saying its loading data
 fill_weather()
-

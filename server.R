@@ -2,8 +2,16 @@
 server <- function(input, output, session) {
 
   # Vars ----
+  OPTS <- list(
+    weather_date_min = START_DATE,
+    weather_date_max = max(weather$date),
+    weather_time_fmt = "%b %d, %Y (day %j)",
+    climate_date_min = start_of_year(),
+    climate_date_max = end_of_year(),
+    climate_time_fmt = "%b %d (day %j)"
+  )
 
-  ## grid_cols ----
+
   grid_cols <- list(
     weather = list(
       "Max daily temp (F)" = "max_temp",
@@ -49,7 +57,7 @@ server <- function(input, output, session) {
 
   # Map UI ----
 
-  ## output$map_opts_ui ----
+  ## map_opts_ui ----
   output$map_opts_ui <- renderUI({
     req(input$map_data_type)
     type <- input$map_data_type
@@ -57,28 +65,21 @@ server <- function(input, output, session) {
     leafletProxy("map") %>%
       clearGroup(layers$grid)
 
-    if (type == "weather") {
-      uiOutput("weather_opts_ui")
-    } else if (type == "climate") {
-      uiOutput("climate_opts_ui")
-    } else if (type == "comparison") {
-      uiOutput("comparison_opts_ui")
-    }
+    tagList(
+      if (type == "weather") {
+        uiOutput("weather_opts_ui")
+      } else if (type == "climate") {
+        uiOutput("climate_opts_ui")
+      } else if (type == "comparison") {
+        uiOutput("comparison_opts_ui")
+      },
+      uiOutput("date_btns_ui")
+    )
   })
 
-  ## output$weather_opts_ui ----
+  ## weather_opts_ui ----
   output$weather_opts_ui <- renderUI({
     req(input$map_data_type)
-
-    isolate({
-      date_value <- if (!is.null(input$weather_date)) {
-        input$weather_date
-      } else if (!is.null(input$climate_date)) {
-        input$climate_date
-      } else {
-        yesterday()
-      }
-    })
 
     tagList(
       radioButtons(
@@ -87,31 +88,25 @@ server <- function(input, output, session) {
         choices = grid_cols$weather,
         selected = grid_cols$weather[1]
       ),
-      sliderInput(
-        inputId = "weather_date",
-        label = "Date",
-        min = START_DATE,
-        max = yesterday(),
-        value = date_value,
-        timeFormat = "%b %d, %Y (day %j)"
-      )
+      uiOutput("weather_date_ui")
     )
   })
 
-  ## output$climate_opts_ui ----
+  ## weather_date_ui ----
+  output$weather_date_ui <- renderUI({
+    sliderInput(
+      inputId = "weather_date",
+      label = "Date",
+      min = START_DATE,
+      max = yesterday(),
+      value = coalesce(input$weather_date, max(weather$date)),
+      timeFormat = OPTS$weather_time_fmt
+    )
+  })
+
+  ## climate_opts_ui ----
   output$climate_opts_ui <- renderUI({
     req(input$map_data_type)
-
-    isolate({
-      date_value <- if (!is.null(input$climate_date)) {
-        input$climate_date
-      } else if (!is.null(input$weather_date)) {
-        # TODO: would weather_date ever be null?
-        input$weather_date
-      } else {
-        yesterday()
-      }
-    })
 
     tagList(
       radioButtons(
@@ -128,28 +123,25 @@ server <- function(input, output, session) {
         choices = grid_cols$climate,
         selected = grid_cols$climate[1]
       ),
-      sliderInput(
-        inputId = "climate_date",
-        label = "Date",
-        min = START_DATE,
-        max = as_date(paste0(year(START_DATE), "-12-31")),
-        value = date_value,
-        timeFormat = "%b %d (day %j)"
-      )
+      uiOutput("climate_date_ui")
     )
   })
 
-  ## output$comparison_opts_ui
+  ## climate_opts_ui ----
+  output$climate_date_ui <- renderUI({
+    sliderInput(
+      inputId = "climate_date",
+      label = "Date",
+      min = start_of_year(),
+      max = end_of_year(),
+      value = coalesce(input$climate_date, max(weather$date)),
+      timeFormat = OPTS$climate_time_fmt
+    )
+  })
+
+  ## comparison_opts_ui ----
   output$comparison_opts_ui <- renderUI({
     req(input$map_data_type)
-
-    isolate({
-      date_value <- if (!is.null(input$weather_date)) {
-        input$weather_date
-      } else {
-        yesterday()
-      }
-    })
 
     tagList(
       radioButtons(
@@ -166,16 +158,63 @@ server <- function(input, output, session) {
         choices = grid_cols$comparison,
         selected = grid_cols$comparison[1]
       ),
-      sliderInput(
-        inputId = "weather_date",
-        label = "Date",
-        min = START_DATE,
-        max = yesterday(),
-        value = date_value,
-        timeFormat = "%b %d, %Y (day %j)"
+      uiOutput("weather_date_ui")
+    )
+  })
+
+  ## date_btns_ui ----
+  output$date_btns_ui <- renderUI({
+    req(input$map_data_type)
+
+    tagList(
+      tags$label(
+        "for" = "date-btns",
+        "Date adjustment"
+      ),
+      div(
+        class = "date-btns",
+        id = "date-btns",
+        actionButton("date_earlier_7", "-7"),
+        actionButton("date_earlier_1", "-1"),
+        actionButton("date_later_1", "+1"),
+        actionButton("date_later_7", "+7"),
+        actionButton("date_reset", "Reset"),
       )
     )
   })
+
+  ## date btn handlers ----
+  observeEvent(input$date_earlier_1, move_date(-1))
+  observeEvent(input$date_earlier_7, move_date(-7))
+  observeEvent(input$date_later_1, move_date(1))
+  observeEvent(input$date_later_7, move_date(7))
+  observeEvent(input$date_reset, move_date(0))
+
+  move_date <- function(step) {
+    if (input$map_data_type == "climate") {
+      id <- "climate_date"
+      value <- clamp(
+        input$climate_date + step,
+        OPTS$climate_date_min,
+        OPTS$climate_date_max
+      )
+      fmt <- OPTS$climate_time_fmt
+    } else {
+      id <- "weather_date"
+      value <- clamp(
+        input$weather_date + step,
+        OPTS$weather_date_min,
+        OPTS$weather_date_max
+      )
+      fmt <- OPTS$weather_time_fmt
+    }
+    if (step == 0) value <- yesterday()
+    updateSliderInput(
+      inputId = id,
+      value = value,
+      timeFormat = fmt
+    )
+  }
 
 
   # Map rendering ----
@@ -333,7 +372,6 @@ server <- function(input, output, session) {
 
       req(input$weather_value)
       req(input$weather_date)
-
       opts$col <- input$weather_value
       opts$date <- input$weather_date
       weather %>%
@@ -346,11 +384,9 @@ server <- function(input, output, session) {
       req(input$climate_period)
       req(input$climate_value)
       req(input$climate_date)
-
       opts$period <- input$climate_period
       opts$col <- input$climate_value
       opts$date <- input$climate_date
-
       climate[[opts$period]] %>%
         filter(yday == yday(opts$date)) %>%
         rename(c("value" = opts$col)) %>%
@@ -361,11 +397,9 @@ server <- function(input, output, session) {
       req(input$climate_period)
       req(input$comparison_value)
       req(input$weather_date)
-
       opts$period <- input$climate_period
       opts$col <- input$comparison_value
       opts$date <- input$weather_date
-
       wx <- weather %>%
         filter(date == opts$date) %>%
         rename(c("wx_value" = opts$col)) %>%
@@ -379,6 +413,7 @@ server <- function(input, output, session) {
       cl %>%
         left_join(wx, join_by(grid_pt)) %>%
         mutate(value = wx_value - cl_value)
+
     }
 
     grid %>%

@@ -46,8 +46,6 @@ ui <- fluidPage(
         ),
         mainPanel(
           div(
-            # class = "map-container",
-            # id = "map",
             leafletOutput("map", width = "100%", height = "720px") %>% withSpinnerProxy(hide.ui = T)
           )
         ),
