@@ -16,8 +16,6 @@ suppressMessages({
   library(leaflet) # map
   library(leaflet.extras) # map JS buttons
   library(plotly) # plots
-  library(promises)
-  library(future)
 })
 
 
