@@ -1,50 +1,14 @@
 
 server <- function(input, output, session) {
 
-  # Vars ----
   OPTS <- list(
     weather_date_min = START_DATE,
-    weather_date_max = max(weather$date),
+    weather_date_max = yesterday(),
     weather_time_fmt = "%b %d, %Y (day %j)",
     climate_date_min = start_of_year(),
     climate_date_max = end_of_year(),
     climate_time_fmt = "%b %d (day %j)"
   )
-
-
-  grid_cols <- list(
-    weather = list(
-      "Max daily temp (F)" = "max_temp",
-      "Min daily temp (F)" = "min_temp",
-      "Daily GDD41 accumulation" = "gdd41",
-      "Cumulative GDD41 since Jan 1" = "gdd41cum",
-      "Daily GDD50 accumulation" = "gdd50",
-      "Cumulative GDD50 since Jan 1" = "gdd50cum",
-      "Frost (<32F) this day" = "frost",
-      "Hard freeze (<28F) this day" = "freeze"
-    ),
-    climate = list(
-      "Mean daily max temp (F)" = "max_temp",
-      "Mean daily min temp (F)" = "min_temp",
-      "Mean daily GDD41" = "gdd41",
-      "Mean cumulative GDD41" = "gdd41cum",
-      "Mean daily GDD50" = "gdd50",
-      "Mean cumulative GDD50" = "gdd50cum",
-      "Mean probability of frost on day" = "frost",
-      "Mean probability of hard freeze on day" = "freeze",
-      "Cumulative probability of frost" = "frost_by",
-      "Cumulative probability of hard freeze" = "freeze_by"
-    ),
-    comparison = list(
-      "Max daily temp vs climate average (F)" = "max_temp",
-      "Min daily temp vs climate average (F)" = "min_temp",
-      "Daily GDD41 vs climate average" = "gdd41",
-      "Cumul. GDD41 vs climate average" = "gdd41cum",
-      "Daily GDD50 vs climate average" = "gdd50",
-      "Cumul. GDD50 vs climate average" = "gdd50cum"
-    )
-  )
-
 
   # Reactive values ----
 
@@ -54,6 +18,52 @@ server <- function(input, output, session) {
   ## selected_grid() ----
   selected_grid <- reactiveVal()
 
+  weather_ready <- reactiveVal({
+    length(weather_dates()) == 0
+  })
+
+
+  # Primary UI ----
+
+  output$main_ui <- renderUI({
+    req(weather_ready())
+
+    tagList(
+      sidebarLayout(
+        mainPanel = mainPanel(
+          leafletOutput("map", width = "100%", height = "720px")
+        ),
+        sidebarPanel =  sidebarPanel(
+          radioButtons(
+            inputId = "map_data_type",
+            label = "Choose data layer",
+            choices = list(
+              "Current weather" = "weather",
+              "Climate normals" = "climate",
+              "Weather vs climate" = "comparison"
+            )
+          ),
+          uiOutput("map_opts_ui")
+        ),
+        position = "right"
+      ),
+      br(),
+      div(
+        h3(
+          style = "margin-top: 0;",
+          "Weather details and risk recommendation"
+        ),
+        uiOutput("location_content_ui")
+      )
+    )
+  })
+
+  observe({
+    if (!weather_ready()) {
+      fill_weather()
+      weather_ready(TRUE)
+    }
+  })
 
   # Map UI ----
 
@@ -271,7 +281,7 @@ server <- function(input, output, session) {
               map.locate({
                 setView: true,
                 enableHighAccuracy: false,
-                maxZoom: 12
+                maxZoom: 10
               }).on('locationfound', (event) => {
                 Shiny.setInputValue('user_loc', event.latlng, {priority: 'event'})
               })
@@ -457,7 +467,8 @@ server <- function(input, output, session) {
     req(id)
     if (id == "selected") return()
     coords <- as.numeric(str_split_1(id, " "))
-    selected_grid(tibble(lat = coords[1], lng = coords[2]))
+    list(lat = coords[1], lng = coords[2]) %>%
+      selected_grid()
   })
 
 
@@ -487,15 +498,147 @@ server <- function(input, output, session) {
   })
 
 
-  # observers ----
-  # observe({
-  #   message("selected_grid()")
-  #   print(selected_grid())
-  # })
-  #
-  # observe({
-  #   message("grid_data()")
-  #   print(grid_data())
-  # })
+  # Draw user location on map ----
+
+  observe({
+    req(input$user_loc)
+
+    loc <- input$user_loc
+    delay(250, {
+      lapply(loc, function(x) round(x, 1)) %>%
+        selected_grid()
+      leafletProxy("map") %>%
+        addMarkers(
+          lat = loc$lat, lng = loc$lng,
+          layerId = "user_loc",
+          label = HTML(str_glue("
+          <b>Your location</b><br>
+          Latitude: {loc$lat}<br>
+          Longitude: {loc$lng}<br>
+          <i>Click to remove marker.</i>
+        "))
+        )
+    })
+  })
+
+  observeEvent(input$map_marker_click, {
+    req(input$map_marker_click$id == "user_loc")
+    leafletProxy("map") %>%
+      removeMarker("user_loc")
+  })
+
+
+  # Location UI ----
+
+  output$location_content_ui <- renderUI({
+    validate(need(selected_grid(), "Please select a grid cell in the map above to view detailed weather data and alfalfa cutting analysis."))
+
+    loc <- selected_grid()
+    tagList(
+      p(sprintf("Selected grid: %.1f°N, %.1f°W", loc$lat, loc$lng)),
+      tabsetPanel(
+        tabPanel(
+          title = "Weather",
+          uiOutput("weather_plot_ui")
+        ),
+        tabPanel(
+          title = "Climate",
+          uiOutput("climate_plot_ui")
+        ),
+        tabPanel(
+          title = "Weather vs climate",
+          uiOutput("comparison_plot_ui")
+        ),
+        tabPanel(
+          title = "Alfalfa cutting risk",
+          uiOutput("cutting_risk_ui")
+        )
+      )
+    )
+  })
+
+
+  ## Weather ----
+
+  output$weather_plot_ui <- renderUI({
+    tagList(
+      wellPanel(
+        checkboxGroupInput(
+          inputId = "weather_plot_vars",
+          label = "Weather data",
+          choices = grid_cols$weather,
+          selected = grid_cols$weather,
+          inline = TRUE
+        )
+      ),
+      plotlyOutput("weather_plot")
+    )
+  })
+
+  weather_plot_opts <- tribble(
+    ~col, ~type, ~mode, ~yaxis,
+    "max_temp", "scatter", "lines", "y1",
+    "min_temp", "scatter", "lines", "y1",
+    "gdd41", "bar", NA, "y2",
+    "gdd50", "bar", NA, "y2",
+    "gdd41cum", "scatter", "lines", "y3",
+    "gdd50cum", "scatter", "lines", "y3",
+    "frost", "bar", NA, "y4",
+    "freeze", "bar", NA, "y4",
+  ) %>% left_join(
+    enframe(
+      setNames(names(grid_cols$weather), grid_cols$weather),
+      name = "col", value = "name"
+    )
+  )
+
+  ## weather_plot ----
+  output$weather_plot <- renderPlotly({
+    vars <- input$weather_plot_vars
+
+    df <- weather %>%
+      filter(lat == selected_grid()$lat, lng == selected_grid()$lng) %>%
+      mutate(across(c(frost, freeze), as.numeric))
+
+    plt <- plot_ly(type = "scatter", mode = "lines") %>%
+      layout(
+        title = "Weather",
+        xaxis = list(title = "Date"),
+        yaxis = list(title = "Temperature (F)"),
+        yaxis2 = list(
+          title = "Daily GDD",
+          overlaying = "y",
+          side = "right"
+        ),
+        yaxis3 = list(
+          title = "Cumulative GDD",
+          overlaying = "y",
+          side = "right",
+          position = 1
+        ),
+        yaxis4 = list(
+          title = "Frost/Freeze",
+          overlaying = "y",
+          side = "left",
+          position = 0
+        ),
+        hovermode = "x unified"
+      )
+
+    for (row in 1:nrow(weather_plot_opts)) {
+      opts <- as.list(slice(weather_plot_opts, row))
+      if (opts$col %in% vars) {
+        plt <- plt %>% add_trace(
+          x = df$date, y = df[[opts$col]],
+          type = opts$type,
+          mode = { if (!is.na(opts$mode)) opts$mode },
+          name = opts$name,
+          yaxis = opts$yaxis
+        )
+      }
+    }
+
+    plt
+  })
 
 }

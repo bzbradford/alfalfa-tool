@@ -16,6 +16,8 @@ suppressMessages({
   library(leaflet) # map
   library(leaflet.extras) # map JS buttons
   library(plotly) # plots
+  library(promises)
+  library(future)
 })
 
 
@@ -26,10 +28,43 @@ MAX_LAT = 47.1
 MIN_LNG = -93.0
 MAX_LNG = -86.8
 START_DATE = as_date("2024-01-01")
-yesterday <- function() Sys.Date() - 1
+grid_cols <- list(
+  weather = list(
+    "Max daily temp (F)" = "max_temp",
+    "Min daily temp (F)" = "min_temp",
+    "Daily GDD41 accumulation" = "gdd41",
+    "Daily GDD50 accumulation" = "gdd50",
+    "Cumulative GDD41 since Jan 1" = "gdd41cum",
+    "Cumulative GDD50 since Jan 1" = "gdd50cum",
+    "Frost (<32F) this day" = "frost",
+    "Hard freeze (<28F) this day" = "freeze"
+  ),
+  climate = list(
+    "Mean daily max temp (F)" = "max_temp",
+    "Mean daily min temp (F)" = "min_temp",
+    "Mean daily GDD41" = "gdd41",
+    "Mean daily GDD50" = "gdd50",
+    "Mean cumulative GDD41" = "gdd41cum",
+    "Mean cumulative GDD50" = "gdd50cum",
+    "Mean probability of frost on day" = "frost",
+    "Mean probability of hard freeze on day" = "freeze",
+    "Cumulative probability of frost" = "frost_by",
+    "Cumulative probability of hard freeze" = "freeze_by"
+  ),
+  comparison = list(
+    "Max daily temp vs climate average (F)" = "max_temp",
+    "Min daily temp vs climate average (F)" = "min_temp",
+    "Daily GDD41 vs climate average" = "gdd41",
+    "Daily GDD50 vs climate average" = "gdd50",
+    "Cumul. GDD41 vs climate average" = "gdd41cum",
+    "Cumul. GDD50 vs climate average" = "gdd50cum"
+  )
+)
 
 
 # Functions ----
+
+yesterday <- function() Sys.Date() - 1
 
 make_date <- function(y, m, d) {
   as_date(paste(y, m, d, sep = "-"))
@@ -146,18 +181,18 @@ get_weather_grid <- function(date = yesterday()) {
   }
 }
 
-
-# downloads and saves missing daily weather from AgWeather
-fill_weather <- function() {
-  message(str_glue("Checking weather data for {START_DATE} - {yesterday()}..."))
+weather_dates <- function() {
+  # message(str_glue("Checking weather data for {START_DATE} - {yesterday()}..."))
   dates_need <- sort(seq.Date(START_DATE, yesterday(), 1))
   dates_have <- if (exists("weather")) sort(unique(weather$date))
-  dates <- as.character(dates_need[!(dates_need %in% dates_have)])
+  as.character(dates_need[!(dates_need %in% dates_have)])
+}
 
+# downloads and saves missing daily weather from AgWeather
+fill_weather <- function(dates = weather_dates()) {
   if (length(dates) == 0) {
     message("Everything up to date. Nothing to do.")
   } else {
-    message(str_glue("Have {length(dates_have)}/{length(dates_need)} days. Downloading remaining dates..."))
     for (d in dates) {
       message(d, " ==> GET")
       wx <- get_weather_grid(d)
@@ -186,4 +221,6 @@ counties <- read_rds("data/counties.rds")
 if (!exists("climate")) climate <- read_rds("data/climate.rds")
 if (file.exists("data/weather.feather")) weather <- read_feather("data/weather.feather")
 
-fill_weather()
+# delete some weather for testing
+# weather <- weather %>% filter(date < "2024-07-15")
+# weather %>% write_feather("data/weather.feather")
