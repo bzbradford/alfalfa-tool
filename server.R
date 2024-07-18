@@ -12,16 +12,12 @@ server <- function(input, output, session) {
 
   # Reactive values ----
 
-  ## grid_data() ----
-  grid_data <- reactiveVal()
-
-  ## selected_grid() ----
-  selected_grid <- reactiveVal()
-
   weather_ready <- reactiveVal({
     length(weather_dates()) == 0
   })
-
+  grid_data <- reactiveVal()
+  selected_grid <- reactiveVal()
+  has_selected_grid <- reactiveVal(FALSE)
 
   # Primary UI ----
 
@@ -469,6 +465,7 @@ server <- function(input, output, session) {
     coords <- as.numeric(str_split_1(id, " "))
     list(lat = coords[1], lng = coords[2]) %>%
       selected_grid()
+    if (!has_selected_grid()) has_selected_grid(TRUE)
   })
 
 
@@ -491,7 +488,7 @@ server <- function(input, output, session) {
           layerId = "selected",
           weight = .5, opacity = 1, color = "black",
           fillOpacity = 0,
-          label = ~shiny::HTML(label),
+          label = ~shiny::HTML(paste("Selected:", label)),
           options = pathOptions(pane = "selected_grid")
         )
     }
@@ -531,30 +528,28 @@ server <- function(input, output, session) {
   # Location UI ----
 
   output$location_content_ui <- renderUI({
-    validate(need(selected_grid(), "Please select a grid cell in the map above to view detailed weather data for that location. Use the crosshair icon on the map to automatically select your location."))
+    validate(need(has_selected_grid(), "Please select a grid cell in the map above to view detailed weather data for that location. Use the crosshair icon on the map to automatically select your location."))
 
-    loc <- selected_grid()
     tagList(
-      p(sprintf("Selected grid: %.1f°N, %.1f°W", loc$lat, loc$lng)),
+      uiOutput("selected_grid_ui"),
       tabsetPanel(
         tabPanel(
-          title = "Weather",
-          uiOutput("weather_plot_ui")
+          "Weather",
+          uiOutput("weather_plot_ui") %>% withSpinnerProxy()
         ),
         tabPanel(
-          title = "Climate",
-          uiOutput("climate_plot_ui")
+          "Climate",
+          uiOutput("climate_plot_ui") %>% withSpinnerProxy()
         ),
-        tabPanel(
-          title = "Weather vs climate",
-          uiOutput("comparison_plot_ui")
-        ),
-        tabPanel(
-          title = "Alfalfa cutting risk",
-          uiOutput("cutting_risk_ui")
-        )
+        tabPanel("Weather vs climate"),
+        tabPanel("Alfalfa cutting risk")
       )
     )
+  })
+
+  output$selected_grid_ui <- renderUI({
+    loc <- selected_grid()
+    p(sprintf("Selected grid: %.1f°N, %.1f°W", loc$lat, loc$lng))
   })
 
 
@@ -564,8 +559,8 @@ server <- function(input, output, session) {
     tagList(
       wellPanel(
         radioButtons(
-          inputId = "plot_smoothing_opts",
-          label = "Weather averaging options",
+          inputId = "weather_plot_smoothing",
+          label = "Temperature smoothing options",
           choices = list(
             "Daily observations (no smoothing)" = 1,
             "Weekly rolling mean" = 7,
@@ -583,19 +578,19 @@ server <- function(input, output, session) {
   })
 
   output$weather_plot <- renderPlotly({
-    req(input$plot_smoothing_opts)
+    req(input$weather_plot_smoothing)
 
     loc <- selected_grid()
-    w <- as.numeric(input$plot_smoothing_opts)
+    w <- as.numeric(input$weather_plot_smoothing)
     plt_title <- case_match(w,
-      1 ~ "Air temperature record",
-      7 ~ "7-day average air temperature",
-      14 ~ "14-day average air temperature"
-    )
+      1 ~ "Weather record",
+      7 ~ "7-day average weather record",
+      14 ~ "14-day average air temperature record"
+    ) %>% sprintf("%s for %.1f°N, %.1f°W", ., loc$lat, loc$lng)
     df <- weather %>%
       filter(lat == loc$lat, lng == loc$lng) %>%
       mutate(across(
-        c(min_temp, max_temp, mean_temp),
+        c(min_temp, max_temp, mean_temp, gdd41, gdd50),
         ~zoo::rollapply(.x, width = w, FUN = mean, na.rm = T, partial = T)))
 
     df %>%
@@ -604,45 +599,211 @@ server <- function(input, output, session) {
         name = "Min temp",
         x = ~date, y = ~min_temp,
         type = "scatter", mode = "lines",
+        line = list(color = "cornflowerblue", shape = "spline"),
         hovertemplate = "%{y:.1f}°F",
-        yaxis = "y1",
-        line = list(color = "cornflowerblue", shape = "spline")
+        yaxis = "y1"
       ) %>%
       add_trace(
         name = "Mean temp",
         x = ~date, y = ~mean_temp,
         type = "scatter", mode = "lines",
+        line = list(color = "orange", shape = "spline"),
         hovertemplate = "%{y:.1f}°F",
-        yaxis = "y1",
-        line = list(color = "orange", shape = "spline")
+        yaxis = "y1"
       ) %>%
       add_trace(
         name = "Max temp",
         x = ~date, y = ~max_temp,
         type = "scatter", mode = "lines",
+        line = list(color = "#c5050c", shape = "spline"),
         hovertemplate = "%{y:.1f}°F",
-        yaxis = "y1",
-        line = list(color = "#c5050c", shape = "spline")
+        yaxis = "y1"
       ) %>%
       add_trace(
         name = "Frost (<32F)",
         x = ~date, y = ~if_else(min_temp <= 32, 32, NA),
         type = "scatter", mode = "lines",
-        hovertemplate = "Yes",
-        line = list(color = "orchid")
+        line = list(color = "orchid"),
+        hovertemplate = "Yes"
       ) %>%
       add_trace(
         name = "Hard freeze (<28F)",
         x = ~date, y = ~if_else(min_temp <= 28, 28, NA),
         type = "scatter", mode = "lines",
-        hovertemplate = "Yes",
-        line = list(color = "purple")
+        line = list(color = "purple"),
+        hovertemplate = "Yes"
+      ) %>%
+      add_trace(
+        name = "GDD41 since Jan 1",
+        x = ~date, y = ~gdd41cum,
+        type = "scatter", mode = "lines",
+        line = list(color = "green"),
+        hovertemplate = "%{y:.1f}",
+        yaxis = "y2",
+        visible = "legendonly"
+      ) %>%
+      add_trace(
+        name = "GDD50 since Jan 1",
+        x = ~date, y = ~gdd50cum,
+        type = "scatter", mode = "lines",
+        line = list(color = "brown"),
+        hovertemplate = "%{y:.1f}",
+        yaxis = "y2",
+        visible = "legendonly"
       ) %>%
       layout(
-        title = sprintf("%s for %.1f°N, %.1f°W", plt_title, loc$lat, loc$lng),
-        xaxis = list(title = "Date"),
-        yaxis = list(title = "Temperature (F)"),
+        title = plt_title,
+        xaxis = list(
+          title = "Date",
+          domain = c(0, .9)),
+        yaxis = list(
+          title = "Temperature (F)"),
+        yaxis2 = list(
+          title = "Growing degree days",
+          overlaying = "y",
+          side = "right"),
         hovermode = "x unified"
+      )
+  })
+
+
+  ## Climate plot ----
+
+  output$climate_plot_ui <- renderUI({
+    tagList(
+      wellPanel(
+        radioButtons(
+          inputId = "climate_plot_period",
+          label = "Climate dataset",
+          choices = list(
+            "10-year climate (2013-2023)" = "c10",
+            "5-year climate (2018-2023)" = "c5"),
+          inline = TRUE
+        ),
+        radioButtons(
+          inputId = "climate_plot_smoothing",
+          label = "Temperature smoothing options",
+          choices = list(
+            "Daily climate average" = 1,
+            "Weekly rolling mean" = 7,
+            "14-day rolling mean" = 14),
+          selected = 7,
+          inline = T
+        ),
+        uiOutput("plot_smoothing_opts_ui")
+      ),
+      plotlyOutput("climate_plot"),
+      div(
+        class = "plot-caption",
+        "Click on any legend item in the plot to show or hide it. Today's date is indicated as a vertical dashed line. Climate data sourced from ", a("GridMET", href = "https://www.climatologylab.org/gridmet.html", .noWS = "outside"), "."
+      )
+    )
+  })
+
+  output$climate_plot <- renderPlotly({
+    req(input$climate_plot_period)
+    req(input$climate_plot_smoothing)
+
+    loc <- selected_grid()
+    p <- input$climate_plot_period
+    w <- as.numeric(input$climate_plot_smoothing)
+    plt_title <- case_match(w,
+      1 ~ "Daily average",
+      7 ~ "7-day average",
+      14 ~ "14-day average"
+    ) %>% paste(case_match(p,
+      "c10" ~ "10-year climate record (2013-2023)",
+      "c5" ~ "5-year climate record (2018-2023)"
+    ))
+    df <- climate[[p]] %>%
+      filter(lat == loc$lat, lng == loc$lng) %>%
+      mutate(across(
+        c(min_temp, max_temp, mean_temp, frost, freeze, frost_by, freeze_by),
+        ~zoo::rollapply(.x, width = w, FUN = mean, na.rm = T, partial = T))) %>%
+      mutate(date = start_of_year() + yday - 1)
+
+    df %>%
+      plot_ly() %>%
+      add_trace(
+        name = "Min temp",
+        x = ~date, y = ~min_temp,
+        type = "scatter", mode = "lines",
+        line = list(color = "cornflowerblue", shape = "spline"),
+        hovertemplate = "%{y:.1f}°F",
+        yaxis = "y1"
+      ) %>%
+      add_trace(
+        name = "Mean temp",
+        x = ~date, y = ~mean_temp,
+        type = "scatter", mode = "lines",
+        line = list(color = "orange", shape = "spline"),
+        hovertemplate = "%{y:.1f}°F",
+        yaxis = "y1"
+      ) %>%
+      add_trace(
+        name = "Max temp",
+        x = ~date, y = ~max_temp,
+        type = "scatter", mode = "lines",
+        line = list(color = "#c5050c", shape = "spline"),
+        hovertemplate = "%{y:.1f}°F",
+        yaxis = "y1"
+      ) %>%
+      add_trace(
+        name = "Frost probability",
+        x = ~date, y = ~frost*100,
+        type = "scatter", mode = "lines",
+        line = list(color = "orchid", shape = "spline"),
+        hovertemplate = "%{y:.1f}%",
+        yaxis = "y2"
+      ) %>%
+      add_trace(
+        name = "Hard freeze probability",
+        x = ~date, y = ~freeze*100,
+        type = "scatter", mode = "lines",
+        hovertemplate = "%{y:.1f}%",
+        line = list(color = "purple", shape = "spline"),
+        yaxis = "y2"
+      ) %>%
+      add_trace(
+        name = "Cumul. frost prob.",
+        x = ~date, y = ~frost_by*100,
+        type = "scatter", mode = "lines",
+        hovertemplate = "%{y:.1f}%",
+        line = list(color = "orchid", shape = "spline", dash = "dot"),
+        yaxis = "y2"
+      ) %>%
+      add_trace(
+        name = "Cumul. freeze prob.",
+        x = ~date, y = ~freeze_by*100,
+        type = "scatter", mode = "lines",
+        hovertemplate = "%{y:.1f}%",
+        line = list(color = "purple", shape = "spline", dash = "dot"),
+        yaxis = "y2"
+      ) %>%
+      layout(
+        title = plt_title,
+        xaxis = list(
+          title = "Date",
+          dtick = "M1",
+          tickformat = "%b",
+          hoverformat = "%b %d (day %j)",
+          domain = c(0, .95)),
+        yaxis = list(
+          title = "Temperature (F)"),
+        yaxis2 = list(
+          title = "Frost/freeze probability",
+          overlaying = "y",
+          side = "right"),
+        hovermode = "x unified",
+        shapes = list(
+          list(
+            type = "line",
+            x0 = Sys.Date(), x1 = Sys.Date(),
+            y0 = 0, y1 = 1, yref = "paper",
+            line = list(color = "black", dash = "dot"),
+            opacity = .5
+          )
+        )
       )
   })
 

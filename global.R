@@ -156,7 +156,7 @@ fix_coords <- function(df) {
 }
 
 withSpinnerProxy <- function(ui, ...) {
-  ui %>% shinycssloaders::withSpinner(type = 8, color = "#30a67d", ...)
+  ui %>% shinycssloaders::withSpinner(type = 8, color = "#30a67d", proxy.height = "400px", ...)
 }
 
 add_climate_cols <- function(.data) {
