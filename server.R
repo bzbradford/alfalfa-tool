@@ -531,7 +531,7 @@ server <- function(input, output, session) {
   # Location UI ----
 
   output$location_content_ui <- renderUI({
-    validate(need(selected_grid(), "Please select a grid cell in the map above to view detailed weather data and alfalfa cutting analysis."))
+    validate(need(selected_grid(), "Please select a grid cell in the map above to view detailed weather data for that location. Use the crosshair icon on the map to automatically select your location."))
 
     loc <- selected_grid()
     tagList(
@@ -558,87 +558,92 @@ server <- function(input, output, session) {
   })
 
 
-  ## Weather ----
+  ## Weather plot ----
 
   output$weather_plot_ui <- renderUI({
     tagList(
       wellPanel(
-        checkboxGroupInput(
-          inputId = "weather_plot_vars",
-          label = "Weather data",
-          choices = grid_cols$weather,
-          selected = grid_cols$weather,
-          inline = TRUE
+        radioButtons(
+          inputId = "plot_smoothing_opts",
+          label = "Weather averaging options",
+          choices = list(
+            "Daily observations (no smoothing)" = 1,
+            "Weekly rolling mean" = 7,
+            "14-day rolling mean" = 14
+          ),
+          inline = T
         )
       ),
-      plotlyOutput("weather_plot")
+      plotlyOutput("weather_plot"),
+      div(
+        class = "plot-caption",
+        "Click on any legend item in the plot to show or hide it. Weather data originally sourced from NOAA and retrieved from ", a("AgWeather", href = "https://agweather.cals.wisc.edu", .noWS = "outside"), "."
+      )
     )
   })
 
-  weather_plot_opts <- tribble(
-    ~col, ~type, ~mode, ~yaxis,
-    "max_temp", "scatter", "lines", "y1",
-    "min_temp", "scatter", "lines", "y1",
-    "gdd41", "bar", NA, "y2",
-    "gdd50", "bar", NA, "y2",
-    "gdd41cum", "scatter", "lines", "y3",
-    "gdd50cum", "scatter", "lines", "y3",
-    "frost", "bar", NA, "y4",
-    "freeze", "bar", NA, "y4",
-  ) %>% left_join(
-    enframe(
-      setNames(names(grid_cols$weather), grid_cols$weather),
-      name = "col", value = "name"
-    )
-  )
-
-  ## weather_plot ----
   output$weather_plot <- renderPlotly({
-    vars <- input$weather_plot_vars
+    req(input$plot_smoothing_opts)
 
+    loc <- selected_grid()
+    w <- as.numeric(input$plot_smoothing_opts)
+    plt_title <- case_match(w,
+      1 ~ "Air temperature record",
+      7 ~ "7-day average air temperature",
+      14 ~ "14-day average air temperature"
+    )
     df <- weather %>%
-      filter(lat == selected_grid()$lat, lng == selected_grid()$lng) %>%
-      mutate(across(c(frost, freeze), as.numeric))
+      filter(lat == loc$lat, lng == loc$lng) %>%
+      mutate(across(
+        c(min_temp, max_temp, mean_temp),
+        ~zoo::rollapply(.x, width = w, FUN = mean, na.rm = T, partial = T)))
 
-    plt <- plot_ly(type = "scatter", mode = "lines") %>%
+    df %>%
+      plot_ly() %>%
+      add_trace(
+        name = "Min temp",
+        x = ~date, y = ~min_temp,
+        type = "scatter", mode = "lines",
+        hovertemplate = "%{y:.1f}°F",
+        yaxis = "y1",
+        line = list(color = "cornflowerblue", shape = "spline")
+      ) %>%
+      add_trace(
+        name = "Mean temp",
+        x = ~date, y = ~mean_temp,
+        type = "scatter", mode = "lines",
+        hovertemplate = "%{y:.1f}°F",
+        yaxis = "y1",
+        line = list(color = "orange", shape = "spline")
+      ) %>%
+      add_trace(
+        name = "Max temp",
+        x = ~date, y = ~max_temp,
+        type = "scatter", mode = "lines",
+        hovertemplate = "%{y:.1f}°F",
+        yaxis = "y1",
+        line = list(color = "#c5050c", shape = "spline")
+      ) %>%
+      add_trace(
+        name = "Frost (<32F)",
+        x = ~date, y = ~if_else(min_temp <= 32, 32, NA),
+        type = "scatter", mode = "lines",
+        hovertemplate = "Yes",
+        line = list(color = "orchid")
+      ) %>%
+      add_trace(
+        name = "Hard freeze (<28F)",
+        x = ~date, y = ~if_else(min_temp <= 28, 28, NA),
+        type = "scatter", mode = "lines",
+        hovertemplate = "Yes",
+        line = list(color = "purple")
+      ) %>%
       layout(
-        title = "Weather",
+        title = sprintf("%s for %.1f°N, %.1f°W", plt_title, loc$lat, loc$lng),
         xaxis = list(title = "Date"),
         yaxis = list(title = "Temperature (F)"),
-        yaxis2 = list(
-          title = "Daily GDD",
-          overlaying = "y",
-          side = "right"
-        ),
-        yaxis3 = list(
-          title = "Cumulative GDD",
-          overlaying = "y",
-          side = "right",
-          position = 1
-        ),
-        yaxis4 = list(
-          title = "Frost/Freeze",
-          overlaying = "y",
-          side = "left",
-          position = 0
-        ),
         hovermode = "x unified"
       )
-
-    for (row in 1:nrow(weather_plot_opts)) {
-      opts <- as.list(slice(weather_plot_opts, row))
-      if (opts$col %in% vars) {
-        plt <- plt %>% add_trace(
-          x = df$date, y = df[[opts$col]],
-          type = opts$type,
-          mode = { if (!is.na(opts$mode)) opts$mode },
-          name = opts$name,
-          yaxis = opts$yaxis
-        )
-      }
-    }
-
-    plt
   })
 
 }

@@ -35,3 +35,9 @@ a, a:hover, a:focus {
 .date-btns > button {
   padding: 2px 5px;
 }
+
+.plot-caption {
+  padding: 1em;
+  text-align: center;
+  font-style: italic;
+}
