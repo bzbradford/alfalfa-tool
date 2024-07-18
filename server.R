@@ -16,40 +16,44 @@ server <- function(input, output, session) {
     length(weather_dates()) == 0
   })
   grid_data <- reactiveVal()
+  grid_pal <- reactiveVal()
   selected_grid <- reactiveVal()
   has_selected_grid <- reactiveVal(FALSE)
 
+
   # Primary UI ----
 
+  ## main_ui ----
   output$main_ui <- renderUI({
     req(weather_ready())
 
     tagList(
-      sidebarLayout(
-        mainPanel = mainPanel(
+      fluidRow(
+        column(8,
           leafletOutput("map", width = "100%", height = "720px")
         ),
-        sidebarPanel =  sidebarPanel(
-          radioButtons(
-            inputId = "map_data_type",
-            label = "Choose data layer",
-            choices = list(
-              "Current weather" = "weather",
-              "Climate normals" = "climate",
-              "Weather vs climate" = "comparison"
-            )
-          ),
-          uiOutput("map_opts_ui")
-        ),
-        position = "right"
+        column(4,
+          div(
+            class = "well", style = "margin-bottom: 0;",
+            radioButtons(
+              inputId = "map_data_type",
+              label = "Choose data layer",
+              choices = list(
+                "Current weather" = "weather",
+                "Climate normals" = "climate",
+                "Weather vs climate" = "comparison"
+              )
+            ),
+            uiOutput("map_opts_ui")
+          )
+        )
       ),
-      br(),
       div(
         h3(
-          style = "margin-top: 0;",
-          "Weather details and risk recommendation"
+          style = "margin-top: 1em;",
+          "Weather and climate details"
         ),
-        uiOutput("location_content_ui")
+        uiOutput("plot_tabs_ui")
       )
     )
   })
@@ -344,7 +348,9 @@ server <- function(input, output, session) {
         colorNumeric("Spectral", vals, reverse = T)
       }
     }
-    .data %>% mutate(fill = pal(value))
+    grid_pal(pal)
+    .data %>%
+      mutate(fill = pal(value))
   }
 
   set_grid_labels <- function(.data, opts) {
@@ -378,8 +384,10 @@ server <- function(input, output, session) {
 
       req(input$weather_value)
       req(input$weather_date)
+
       opts$col <- input$weather_value
       opts$date <- input$weather_date
+
       weather %>%
         filter(date == opts$date) %>%
         rename(c("value" = opts$col)) %>%
@@ -390,9 +398,11 @@ server <- function(input, output, session) {
       req(input$climate_period)
       req(input$climate_value)
       req(input$climate_date)
+
       opts$period <- input$climate_period
       opts$col <- input$climate_value
       opts$date <- input$climate_date
+
       climate[[opts$period]] %>%
         filter(yday == yday(opts$date)) %>%
         rename(c("value" = opts$col)) %>%
@@ -403,9 +413,11 @@ server <- function(input, output, session) {
       req(input$climate_period)
       req(input$comparison_value)
       req(input$weather_date)
+
       opts$period <- input$climate_period
       opts$col <- input$comparison_value
       opts$date <- input$weather_date
+
       wx <- weather %>%
         filter(date == opts$date) %>%
         rename(c("wx_value" = opts$col)) %>%
@@ -437,7 +449,9 @@ server <- function(input, output, session) {
     grid <- grid_data()
 
     if (is.null(grid)) {
-      map %>% clearGroup(layers$grid)
+      map %>%
+        clearGroup(layers$grid) %>%
+        removeControl("legend")
     } else {
       map %>%
         addRectangles(
@@ -451,6 +465,13 @@ server <- function(input, output, session) {
           fillColor = ~fill,
           label = ~lapply(label, shiny::HTML),
           options = pathOptions(pane = "grid")
+        ) %>%
+        addLegend(
+          layerId = "legend",
+          position = "bottomright",
+          pal = grid_pal(),
+          bins = 5,
+          values = grid$value
         )
     }
   })
@@ -495,7 +516,7 @@ server <- function(input, output, session) {
   })
 
 
-  # Draw user location on map ----
+  ## Draw user location on map ----
 
   observe({
     req(input$user_loc)
@@ -525,9 +546,10 @@ server <- function(input, output, session) {
   })
 
 
-  # Location UI ----
+  # Plot tabs ----
 
-  output$location_content_ui <- renderUI({
+  ## plot_tabs_ui ----
+  output$plot_tabs_ui <- renderUI({
     validate(need(has_selected_grid(), "Please select a grid cell in the map above to view detailed weather data for that location. Use the crosshair icon on the map to automatically select your location."))
 
     tagList(
@@ -547,14 +569,14 @@ server <- function(input, output, session) {
     )
   })
 
+  ## selected_grid_ui ----
   output$selected_grid_ui <- renderUI({
     loc <- selected_grid()
-    p(sprintf("Selected grid: %.1f°N, %.1f°W", loc$lat, loc$lng))
+    p(strong("Selected grid:"), sprintf("%.1f°N, %.1f°W", loc$lat, loc$lng))
   })
 
 
-  ## Weather plot ----
-
+  ## weather_plot_ui ----
   output$weather_plot_ui <- renderUI({
     tagList(
       wellPanel(
@@ -577,6 +599,7 @@ server <- function(input, output, session) {
     )
   })
 
+  ## weather_plot ----
   output$weather_plot <- renderPlotly({
     req(input$weather_plot_smoothing)
 
@@ -633,14 +656,29 @@ server <- function(input, output, session) {
         line = list(color = "purple"),
         hovertemplate = "Yes"
       ) %>%
+      # add_trace(
+      #   name = "GDD41 per day",
+      #   x = ~date, y = ~gdd41,
+      #   type = "scatter", mode = "lines",
+      #   line = list(color = "green"),
+      #   yaxis = "y2",
+      #   visible = "legendonly"
+      # ) %>%
+      # add_trace(
+      #   name = "GDD50 per day",
+      #   x = ~date, y = ~gdd50,
+      #   type = "scatter", mode = "lines",
+      #   line = list(color = "brown"),
+      #   yaxis = "y2",
+      #   visible = "legendonly"
+      # ) %>%
       add_trace(
         name = "GDD41 since Jan 1",
         x = ~date, y = ~gdd41cum,
         type = "scatter", mode = "lines",
         line = list(color = "green"),
         hovertemplate = "%{y:.1f}",
-        yaxis = "y2",
-        visible = "legendonly"
+        yaxis = "y2"
       ) %>%
       add_trace(
         name = "GDD50 since Jan 1",
@@ -648,8 +686,7 @@ server <- function(input, output, session) {
         type = "scatter", mode = "lines",
         line = list(color = "brown"),
         hovertemplate = "%{y:.1f}",
-        yaxis = "y2",
-        visible = "legendonly"
+        yaxis = "y2"
       ) %>%
       layout(
         title = plt_title,
@@ -657,7 +694,8 @@ server <- function(input, output, session) {
           title = "Date",
           domain = c(0, .9)),
         yaxis = list(
-          title = "Temperature (F)"),
+          title = "Temperature (F)",
+          zeroline = F),
         yaxis2 = list(
           title = "Growing degree days",
           overlaying = "y",
@@ -667,8 +705,7 @@ server <- function(input, output, session) {
   })
 
 
-  ## Climate plot ----
-
+  ## climate_plot_ui ----
   output$climate_plot_ui <- renderUI({
     tagList(
       wellPanel(
@@ -700,6 +737,7 @@ server <- function(input, output, session) {
     )
   })
 
+  ## climate_plot ----
   output$climate_plot <- renderPlotly({
     req(input$climate_plot_period)
     req(input$climate_plot_smoothing)

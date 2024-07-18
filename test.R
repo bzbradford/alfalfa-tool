@@ -140,6 +140,13 @@ df %>%
     line = list(color = "purple", shape = "spline"),
     yaxis = "y2"
   ) %>%
+  add_trace(
+    name = "GDD41 per day",
+    x = ~date, y = ~gdd41,
+    type = "scatter", mode = "lines",
+    line = list(color = "green"),
+    yaxis = "y3"
+  ) %>%
   layout(
     title = "Weather",
     hovermode = "x unified",
@@ -154,6 +161,11 @@ df %>%
       title = "Temperature (F)"),
     yaxis2 = list(
       title = "Frost/freeze probability (%)",
+      overlaying = "y",
+      side = "right"
+    ),
+    yaxis3 = list(
+      title = "Growing degree days",
       overlaying = "y",
       side = "right"
     ),
