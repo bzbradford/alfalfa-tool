@@ -28,18 +28,20 @@ MAX_LNG = -86.8
 START_DATE = as_date("2024-01-01")
 grid_cols <- list(
   weather = list(
-    "Max daily temp (F)" = "max_temp",
+    "Mean daily temp (F)" = "mean_temp",
     "Min daily temp (F)" = "min_temp",
+    "Max daily temp (F)" = "max_temp",
     "Daily GDD41 accumulation" = "gdd41",
     "Daily GDD50 accumulation" = "gdd50",
     "Cumulative GDD41 since Jan 1" = "gdd41cum",
-    "Cumulative GDD50 since Jan 1" = "gdd50cum",
-    "Frost (<32F) this day" = "frost",
-    "Hard freeze (<28F) this day" = "freeze"
+    "Cumulative GDD50 since Jan 1" = "gdd50cum"
+    # "Frost (<32F) this day" = "frost",
+    # "Hard freeze (<28F) this day" = "freeze"
   ),
   climate = list(
-    "Mean daily max temp (F)" = "max_temp",
-    "Mean daily min temp (F)" = "min_temp",
+    "Mean daily temp (F)" = "mean_temp",
+    "Min daily temp (F)" = "min_temp",
+    "Max daily temp (F)" = "max_temp",
     "Mean daily GDD41" = "gdd41",
     "Mean daily GDD50" = "gdd50",
     "Mean cumulative GDD41" = "gdd41cum",
@@ -50,8 +52,9 @@ grid_cols <- list(
     "Cumulative probability of hard freeze" = "freeze_by"
   ),
   comparison = list(
-    "Max daily temp vs climate average (F)" = "max_temp",
+    "Mean daily temp vs climate average (F)" = "mean_temp",
     "Min daily temp vs climate average (F)" = "min_temp",
+    "Max daily temp vs climate average (F)" = "max_temp",
     "Daily GDD41 vs climate average" = "gdd41",
     "Daily GDD50 vs climate average" = "gdd50",
     "Cumul. GDD41 vs climate average" = "gdd41cum",
@@ -156,6 +159,35 @@ withSpinnerProxy <- function(ui, ...) {
   ui %>% shinycssloaders::withSpinner(type = 8, color = "#30a67d", ...)
 }
 
+add_climate_cols <- function(.data) {
+  .data %>%
+    mutate(
+      mean_temp = rowMeans(pick(min_temp, max_temp)),
+      .after = max_temp
+    ) %>%
+    mutate(
+      gdd41cum = cumsum(gdd41),
+      gdd50cum = cumsum(gdd50),
+      .by = c(lat, lng),
+      .after = gdd50
+    )
+}
+
+add_weather_cols <- function(.data) {
+  .data %>%
+    arrange(lat, lng, date) %>%
+    mutate(
+      year = year(date),
+      mean_temp = rowMeans(pick(min_temp, max_temp)),
+      frost = min_temp <= 32,
+      freeze = min_temp <= 28
+    ) %>%
+    mutate(
+      gdd41cum = cumsum(gdd41),
+      gdd50cum = cumsum(gdd50),
+      .by = c(lat, lng, year)
+    )
+}
 
 # units: temp=F, pressure=kPa, rh=%
 get_weather_grid <- function(date = yesterday()) {
@@ -167,7 +199,7 @@ get_weather_grid <- function(date = yesterday()) {
   if (nrow(data) > 0) {
     data %>%
       fix_coords() %>%
-      select(lat, lng, date, min_temp, max_temp, frost, freeze = freezing) %>%
+      select(lat, lng, date, min_temp, max_temp) %>%
       mutate(
         date = as_date(date),
         gdd41 = calc_gdd(min_temp, max_temp, 41, 86),
@@ -201,23 +233,27 @@ fill_weather <- function(dates = weather_dates()) {
       }
     }
   }
-  weather <<- weather %>%
-    arrange(lat, lng, date) %>%
-    mutate(year = year(date), .after = date) %>%
-    mutate(
-      gdd41cum = cumsum(gdd41),
-      gdd50cum = cumsum(gdd50),
-      .by = c(lat, lng, year)
-    )
+
+  # save minimal dataset
   weather %>% write_feather("data/weather.feather")
+
+  # build additional cols
+  weather <<- weather %>% add_weather_cols()
 }
 
 
 # Initialize data ----
 
 counties <- read_rds("data/counties.rds")
-if (!exists("climate")) climate <- read_rds("data/climate.rds")
-if (file.exists("data/weather.feather")) weather <- read_feather("data/weather.feather")
+
+if (!exists("climate")) {
+  climate <- read_rds("data/climate.rds") %>% lapply(add_climate_cols)
+}
+
+if (file.exists("data/weather.feather")) {
+  weather <- read_feather("data/weather.feather") %>%
+    add_weather_cols()
+}
 
 # delete some weather for testing
 # weather <- weather %>% filter(date < "2024-07-15")
