@@ -12,20 +12,30 @@ server <- function(input, output, session) {
 
   # Reactive values ----
 
-  weather_ready <- reactiveVal({
-    length(weather_dates()) == 0
-  })
-  grid_data <- reactiveVal()
-  grid_pal <- reactiveVal()
-  selected_grid <- reactiveVal()
-  has_selected_grid <- reactiveVal(FALSE)
+  rv <- reactiveValues(
+
+    # false if new weather data needs downloading
+    weather_ready = length(weather_dates()) == 0,
+
+    # false until any grid point is selected
+    selection_ready = FALSE,
+
+    # lat/lng of selected grid cell
+    selected_grid = NULL,
+
+    # dataset for map grid
+    grid_data = NULL,
+
+    # palette used for map grid
+    grid_pal = NULL,
+  )
 
 
   # Primary UI ----
 
   ## main_ui ----
   output$main_ui <- renderUI({
-    req(weather_ready())
+    req(rv$weather_ready)
 
     tagList(
       fluidRow(
@@ -59,9 +69,9 @@ server <- function(input, output, session) {
   })
 
   observe({
-    if (!weather_ready()) {
+    if (!rv$weather_ready) {
       fill_weather()
-      weather_ready(TRUE)
+      rv$weather_ready <- TRUE
     }
   })
 
@@ -350,7 +360,7 @@ server <- function(input, output, session) {
         colorNumeric("Spectral", vals, reverse = T)
       }
     }
-    grid_pal(pal)
+    rv$grid_pal <- pal
     .data %>%
       mutate(fill = pal(value))
   }
@@ -440,11 +450,10 @@ server <- function(input, output, session) {
 
     }
 
-    grid %>%
+    rv$grid_data <- grid %>%
       mutate(grid_pt = sprintf("%.1f %.1f", lat, lng)) %>%
       set_grid_fill(opts) %>%
-      set_grid_labels(opts) %>%
-      grid_data()
+      set_grid_labels(opts)
   })
 
 
@@ -452,7 +461,7 @@ server <- function(input, output, session) {
 
   observe({
     map <- leafletProxy("map")
-    grid <- grid_data()
+    grid <- rv$grid_data
 
     if (is.null(grid)) {
       map %>%
@@ -475,7 +484,7 @@ server <- function(input, output, session) {
         addLegend(
           layerId = "legend",
           position = "bottomright",
-          pal = grid_pal(),
+          pal = rv$grid_pal,
           bins = 5,
           values = grid$value
         )
@@ -490,8 +499,10 @@ server <- function(input, output, session) {
     req(id)
     if (id == "selected") return()
     coords <- as.numeric(str_split_1(id, " "))
-    list(lat = coords[1], lng = coords[2]) %>%
-      selected_grid()
+    rv$selected_grid <- list(
+      lat = coords[1],
+      lng = coords[2]
+    )
   })
 
 
@@ -499,26 +510,31 @@ server <- function(input, output, session) {
 
   observe({
     map <- leafletProxy("map")
-    if (is.null(selected_grid())) {
+
+    if (is.null(rv$selected_grid)) {
       map %>% removeShape("selected_grid")
-    } else {
-      if (!has_selected_grid()) has_selected_grid(TRUE)
-      pt <- grid_data() %>%
-        filter(lat == selected_grid()$lat, lng == selected_grid()$lng)
-      map %>%
-        removeShape("selected_grid") %>%
-        addRectangles(
-          data = pt,
-          lat1 = ~lat - .05, lat2 = ~lat + .05,
-          lng1 = ~lng - .05, lng2 = ~lng + .05,
-          group = layers$grid,
-          layerId = "selected",
-          weight = .5, opacity = 1, color = "black",
-          fillOpacity = 0,
-          label = ~shiny::HTML(paste0(label, "<br><i>This location is shown in the charts below.</i>")),
-          options = pathOptions(pane = "selected_grid")
-        )
+      return()
     }
+
+    if (!rv$selection_ready) { rv$selection_ready <- TRUE }
+
+    pt <- rv$selected_grid
+    pt_data <- rv$grid_data %>%
+      filter(lat == pt$lat, lng == pt$lng)
+
+    map %>%
+      removeShape("selected_grid") %>%
+      addRectangles(
+        data = pt_data,
+        lat1 = ~lat - .05, lat2 = ~lat + .05,
+        lng1 = ~lng - .05, lng2 = ~lng + .05,
+        group = layers$grid,
+        layerId = "selected",
+        weight = .5, opacity = 1, color = "black",
+        fillOpacity = 0,
+        label = ~shiny::HTML(paste0(label, "<br><i>This location is shown in the charts below.</i>")),
+        options = pathOptions(pane = "selected_grid")
+      )
   })
 
 
@@ -531,7 +547,7 @@ server <- function(input, output, session) {
     loc_grid <- lapply(loc, function(x) round(x, 1))
 
     delay(250, {
-      selected_grid(loc_grid)
+      rv$selected_grid <- loc_grid
       leafletProxy("map") %>%
         addMarkers(
           lat = loc$lat, lng = loc$lng,
@@ -557,7 +573,7 @@ server <- function(input, output, session) {
 
   ## plot_tabs_ui ----
   output$plot_tabs_ui <- renderUI({
-    validate(need(has_selected_grid(), "Please select a grid cell in the map above to view detailed weather data for that location. Use the crosshair icon on the map to automatically select your location."))
+    validate(need(rv$selection_ready, "Please select a grid cell in the map above to view detailed weather data for that location. Use the crosshair icon on the map to automatically select your location."))
 
     tagList(
       uiOutput("selected_grid_ui"),
@@ -578,7 +594,8 @@ server <- function(input, output, session) {
 
   ## selected_grid_ui ----
   output$selected_grid_ui <- renderUI({
-    loc <- selected_grid()
+    loc <- rv$selected_grid
+    req(loc)
     p(strong("Selected grid:"), sprintf("%.1f°N, %.1f°W", loc$lat, loc$lng))
   })
 
@@ -610,7 +627,7 @@ server <- function(input, output, session) {
   output$weather_plot <- renderPlotly({
     req(input$weather_plot_smoothing)
 
-    loc <- selected_grid()
+    loc <- rv$selected_grid
     w <- as.numeric(input$weather_plot_smoothing)
     plt_title <- case_match(w,
       1 ~ "Weather record",
@@ -749,7 +766,7 @@ server <- function(input, output, session) {
     req(input$climate_plot_period)
     req(input$climate_plot_smoothing)
 
-    loc <- selected_grid()
+    loc <- rv$selected_grid
     p <- input$climate_plot_period
     w <- as.numeric(input$climate_plot_smoothing)
     plt_title <- case_match(w,
