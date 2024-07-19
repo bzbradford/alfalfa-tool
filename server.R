@@ -335,13 +335,15 @@ server <- function(input, output, session) {
 
   pct_cols <- c("frost", "freeze", "frost_by", "freeze_by")
 
+  # set grid color palette
   set_grid_fill <- function(.data, opts) {
+    comp_cols <- c("min_temp", "max_temp", "gdd41", "gdd50")
     vals <- .data$value
     pal <- if (opts$col %in% pct_cols) {
       # percent frost/freeze
       colorNumeric("Blues", c(0, 1), reverse = T)
     } else {
-      if (opts$type == "comparison" & opts$col %in% c("min_temp", "max_temp", "gdd41")) {
+      if (opts$type == "comparison" & opts$col %in% comp_cols) {
         # +/- comparisons vs climate. Centered on zero
         colorNumeric("Spectral", c(-max(abs(vals)), max(abs(vals))), reverse = T)
       } else {
@@ -353,12 +355,14 @@ server <- function(input, output, session) {
       mutate(fill = pal(value))
   }
 
+  # set grid labels
+  # TODO: add other data to label?
   set_grid_labels <- function(.data, opts) {
     cols <- grid_cols[[opts$type]]
     prefix <- setNames(names(cols), cols)[[opts$col]]
     .data %>% mutate(
       label = paste0(
-        str_glue("<b>{lat}, {lng}</b><br>"),
+        "<b>",
         if (opts$type == "weather" & opts$col %in% c("frost", "freeze")) {
           sprintf("%s: %s", prefix, value)
         } else if (opts$col %in% pct_cols) {
@@ -367,7 +371,9 @@ server <- function(input, output, session) {
           sprintf("%s: %+.1f", prefix, value)
         } else {
           sprintf("%s: %.1f", prefix, value)
-        }
+        },
+        "</b><br>",
+        str_glue("Location: {lat}°N, {lng}°W")
       )
     )
   }
@@ -486,17 +492,17 @@ server <- function(input, output, session) {
     coords <- as.numeric(str_split_1(id, " "))
     list(lat = coords[1], lng = coords[2]) %>%
       selected_grid()
-    if (!has_selected_grid()) has_selected_grid(TRUE)
   })
 
 
-  ## Draw selected point on map ----
+  ## Draw selected grid on map ----
 
   observe({
     map <- leafletProxy("map")
     if (is.null(selected_grid())) {
       map %>% removeShape("selected_grid")
     } else {
+      if (!has_selected_grid()) has_selected_grid(TRUE)
       pt <- grid_data() %>%
         filter(lat == selected_grid()$lat, lng == selected_grid()$lng)
       map %>%
@@ -509,7 +515,7 @@ server <- function(input, output, session) {
           layerId = "selected",
           weight = .5, opacity = 1, color = "black",
           fillOpacity = 0,
-          label = ~shiny::HTML(paste("Selected:", label)),
+          label = ~shiny::HTML(paste0(label, "<br><i>This location is shown in the charts below.</i>")),
           options = pathOptions(pane = "selected_grid")
         )
     }
@@ -522,9 +528,10 @@ server <- function(input, output, session) {
     req(input$user_loc)
 
     loc <- input$user_loc
+    loc_grid <- lapply(loc, function(x) round(x, 1))
+
     delay(250, {
-      lapply(loc, function(x) round(x, 1)) %>%
-        selected_grid()
+      selected_grid(loc_grid)
       leafletProxy("map") %>%
         addMarkers(
           lat = loc$lat, lng = loc$lng,
