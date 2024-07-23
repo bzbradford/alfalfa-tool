@@ -180,3 +180,9 @@ df %>%
     )
   )
 
+
+plot_ly() %>%
+  add_temp_traces(df, "y1")
+
+
+

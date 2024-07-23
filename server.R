@@ -1,3 +1,4 @@
+#- server.R -#
 
 server <- function(input, output, session) {
 
@@ -10,7 +11,7 @@ server <- function(input, output, session) {
     climate_time_fmt = "%b %d (day %j)"
   )
 
-  # Reactive values ----
+  # Reactive values ------------------------------------------------------------
 
   rv <- reactiveValues(
 
@@ -31,9 +32,9 @@ server <- function(input, output, session) {
   )
 
 
-  # Primary UI ----
+  # MAIN UI --------------------------------------------------------------------
 
-  ## main_ui ----
+  # this will appear as a spinning loader until weather data ready
   output$main_ui <- renderUI({
     req(rv$weather_ready)
 
@@ -63,11 +64,12 @@ server <- function(input, output, session) {
           style = "margin-top: 1em;",
           "Weather and climate details"
         ),
-        uiOutput("plot_tabs_ui")
+        uiOutput("location_ui")
       )
     )
   })
 
+  # download fresh weather data if not up to date
   observe({
     if (!rv$weather_ready) {
       fill_weather()
@@ -75,9 +77,10 @@ server <- function(input, output, session) {
     }
   })
 
-  # Map UI ----
 
-  ## map_opts_ui ----
+  # MAP OPTIONS UI -------------------------------------------------------------
+
+  ## Map data type selector ----
   output$map_opts_ui <- renderUI({
     req(input$map_data_type)
     type <- input$map_data_type
@@ -97,7 +100,9 @@ server <- function(input, output, session) {
     )
   })
 
-  ## weather_opts_ui ----
+
+  ## Weather options ----
+
   output$weather_opts_ui <- renderUI({
     req(input$map_data_type)
 
@@ -112,31 +117,14 @@ server <- function(input, output, session) {
     )
   })
 
-  ## weather_date_ui ----
-  output$weather_date_ui <- renderUI({
-    sliderInput(
-      inputId = "weather_date",
-      label = "Date",
-      min = START_DATE,
-      max = yesterday(),
-      value = coalesce(input$weather_date, max(weather$date)),
-      timeFormat = OPTS$weather_time_fmt
-    )
-  })
 
-  ## climate_opts_ui ----
+  ## Climate options ----
+
   output$climate_opts_ui <- renderUI({
     req(input$map_data_type)
 
     tagList(
-      radioButtons(
-        inputId = "climate_period",
-        label = "Climate period",
-        choices = list(
-          "10-year climate average (2013-2023)" = "c10",
-          "5-year climate average (2018-2023)" = "c5"
-        )
-      ),
+      add_climate_period_ui("climate_period"),
       radioButtons(
         inputId = "climate_value",
         label = "Data value",
@@ -147,19 +135,9 @@ server <- function(input, output, session) {
     )
   })
 
-  ## climate_opts_ui ----
-  output$climate_date_ui <- renderUI({
-    sliderInput(
-      inputId = "climate_date",
-      label = "Date",
-      min = start_of_year(),
-      max = end_of_year(),
-      value = coalesce(input$climate_date, max(weather$date)),
-      timeFormat = OPTS$climate_time_fmt
-    )
-  })
 
-  ## comparison_opts_ui ----
+  ## Comparison options ----
+
   output$comparison_opts_ui <- renderUI({
     req(input$map_data_type)
 
@@ -182,7 +160,39 @@ server <- function(input, output, session) {
     )
   })
 
-  ## date_btns_ui ----
+
+  ## Date selector ----
+
+  ### Weather/Comparison date ----
+
+  output$weather_date_ui <- renderUI({
+    sliderInput(
+      inputId = "weather_date",
+      label = "Date",
+      min = START_DATE,
+      max = yesterday(),
+      value = coalesce(input$weather_date, max(weather$date)),
+      timeFormat = OPTS$weather_time_fmt
+    )
+  })
+
+
+  ### Climate date ----
+
+  output$climate_date_ui <- renderUI({
+    sliderInput(
+      inputId = "climate_date",
+      label = "Date",
+      min = start_of_year(),
+      max = end_of_year(),
+      value = coalesce(input$climate_date, max(weather$date)),
+      timeFormat = OPTS$climate_time_fmt
+    )
+  })
+
+
+  ### Date adjustment buttons ----
+
   output$date_btns_ui <- renderUI({
     req(input$map_data_type)
 
@@ -202,13 +212,6 @@ server <- function(input, output, session) {
       )
     )
   })
-
-  ## date btn handlers ----
-  observeEvent(input$date_earlier_1, move_date(-1))
-  observeEvent(input$date_earlier_7, move_date(-7))
-  observeEvent(input$date_later_1, move_date(1))
-  observeEvent(input$date_later_7, move_date(7))
-  observeEvent(input$date_reset, move_date(0))
 
   move_date <- function(step) {
     if (input$map_data_type == "climate") {
@@ -236,8 +239,15 @@ server <- function(input, output, session) {
     )
   }
 
+  observeEvent(input$date_earlier_1, move_date(-1))
+  observeEvent(input$date_earlier_7, move_date(-7))
+  observeEvent(input$date_later_1, move_date(1))
+  observeEvent(input$date_later_7, move_date(7))
+  observeEvent(input$date_reset, move_date(0))
 
-  # Map rendering ----
+
+
+  # MAP RENDERING --------------------------------------------------------------
 
   basemaps <- tribble(
     ~label, ~provider,
@@ -329,7 +339,9 @@ server <- function(input, output, session) {
       )
   })
 
+
   ## Hide the legend ----
+
   observeEvent(TRUE, {
     delay(3000, {
       leafletProxy("map") %>%
@@ -388,6 +400,9 @@ server <- function(input, output, session) {
     )
   }
 
+
+  ## Assign grid data ----
+
   observe({
     req(input$map_data_type)
 
@@ -437,21 +452,18 @@ server <- function(input, output, session) {
       wx <- weather %>%
         filter(date == opts$date) %>%
         rename(c("wx_value" = opts$col)) %>%
-        mutate(grid_pt = sprintf("%.1f %.1f", lat, lng)) %>%
-        select(grid_pt, wx_value)
+        select(lat, lng, wx_value)
       cl <- climate[[opts$period]] %>%
         filter(yday == yday(opts$date)) %>%
         rename(c("cl_value" = opts$col)) %>%
-        mutate(grid_pt = sprintf("%.1f %.1f", lat, lng)) %>%
-        select(lat, lng, grid_pt, cl_value)
+        select(lat, lng, cl_value)
       cl %>%
-        left_join(wx, join_by(grid_pt)) %>%
+        left_join(wx, join_by(lat, lng)) %>%
         mutate(value = wx_value - cl_value)
-
     }
 
     rv$grid_data <- grid %>%
-      mutate(grid_pt = sprintf("%.1f %.1f", lat, lng)) %>%
+      mutate(grid_pt = coords_to_pt(lat, lng)) %>%
       set_grid_fill(opts) %>%
       set_grid_labels(opts)
   })
@@ -498,11 +510,7 @@ server <- function(input, output, session) {
     id <- input$map_shape_click$id
     req(id)
     if (id == "selected") return()
-    coords <- as.numeric(str_split_1(id, " "))
-    rv$selected_grid <- list(
-      lat = coords[1],
-      lng = coords[2]
-    )
+    rv$selected_grid <- pt_to_coords(id)
   })
 
 
@@ -518,14 +526,12 @@ server <- function(input, output, session) {
 
     if (!rv$selection_ready) { rv$selection_ready <- TRUE }
 
-    pt <- rv$selected_grid
-    pt_data <- rv$grid_data %>%
-      filter(lat == pt$lat, lng == pt$lng)
-
+    loc <- rv$selected_grid
     map %>%
       removeShape("selected_grid") %>%
       addRectangles(
-        data = pt_data,
+        data = rv$grid_data %>%
+          filter(lat == loc$lat, lng == loc$lng),
         lat1 = ~lat - .05, lat2 = ~lat + .05,
         lng1 = ~lng - .05, lng2 = ~lng + .05,
         group = layers$grid,
@@ -569,30 +575,57 @@ server <- function(input, output, session) {
   })
 
 
-  # Plot tabs ----
+  # PLOTS & DATA ---------------------------------------------------------------
 
-  ## plot_tabs_ui ----
-  output$plot_tabs_ui <- renderUI({
+  custom_plot_elems <- list(
+    "Weather - Temperature" = "weather_temp",
+    "Weather - GDD/day" = "weather_gdd",
+    "Weather - Cumulative GDD" = "weather_gddcum",
+    "Climate - Temperature" = "climate_temp",
+    "Climate - GDD/day" = "climate_gdd",
+    "Climate - Cumulative GDD" = "climate_gddcum",
+    "Climate - Frost/Freeze probability" = "climate_frost"
+  )
+
+  smoothable_weather <- c("min_temp", "max_temp", "mean_temp", "gdd41", "gdd50", "gdd41cum", "gdd50cum")
+  smoothable_climate <- c(smoothable_weather, "frost", "freeze", "frost_by", "freeze_by")
+
+
+  ## Set local data ----
+
+  loc_data <- reactive({
+    req(rv$selected_grid)
+
+    loc <- rv$selected_grid
+
+    list(
+      weather = weather %>% filter(lat == loc$lat, lng == loc$lng),
+      c10 = climate$c10 %>%
+        filter(lat == loc$lat, lng == loc$lng) %>%
+        mutate(date = start_of_year() + yday - 1),
+      c5 = climate$c5 %>%
+        filter(lat == loc$lat, lng == loc$lng) %>%
+        mutate(date = start_of_year() + yday - 1)
+    )
+  })
+
+
+  ## Main UI ----
+
+  output$location_ui <- renderUI({
     validate(need(rv$selection_ready, "Please select a grid cell in the map above to view detailed weather data for that location. Use the crosshair icon on the map to automatically select your location."))
 
     tagList(
       uiOutput("selected_grid_ui"),
       tabsetPanel(
-        tabPanel(
-          "Weather",
-          uiOutput("weather_plot_ui") %>% withSpinnerProxy()
-        ),
-        tabPanel(
-          "Climate",
-          uiOutput("climate_plot_ui") %>% withSpinnerProxy()
-        ),
-        tabPanel("Weather vs climate"),
+        tabPanel("Weather plot", uiOutput("weather_plot_ui")),
+        tabPanel("Climate plot", uiOutput("climate_plot_ui")),
+        tabPanel("Custom plot", uiOutput("custom_plot_ui")),
         tabPanel("Alfalfa cutting risk")
       )
     )
   })
 
-  ## selected_grid_ui ----
   output$selected_grid_ui <- renderUI({
     loc <- rv$selected_grid
     req(loc)
@@ -600,30 +633,18 @@ server <- function(input, output, session) {
   })
 
 
-  ## weather_plot_ui ----
+  ## Weather plot ----
+
   output$weather_plot_ui <- renderUI({
     tagList(
       wellPanel(
-        radioButtons(
-          inputId = "weather_plot_smoothing",
-          label = "Temperature smoothing options",
-          choices = list(
-            "Daily observations (no smoothing)" = 1,
-            "Weekly rolling mean" = 7,
-            "14-day rolling mean" = 14
-          ),
-          inline = T
-        )
+        add_smoothing_ui("weather_plot_smoothing"),
       ),
       plotlyOutput("weather_plot"),
-      div(
-        class = "plot-caption",
-        "Click on any legend item in the plot to show or hide it. Weather data originally sourced from NOAA and retrieved from ", a("AgWeather", href = "https://agweather.cals.wisc.edu", .noWS = "outside"), "."
-      )
+      div(class = "plot-caption", HTML("Click on any legend item in the plot to show or hide it. Weather data originally sourced from NOAA and retrieved from <a href='https://agweather.cals.wisc.edu/'>AgWeather</a>."))
     )
   })
 
-  ## weather_plot ----
   output$weather_plot <- renderPlotly({
     req(input$weather_plot_smoothing)
 
@@ -634,99 +655,24 @@ server <- function(input, output, session) {
       7 ~ "7-day average weather record",
       14 ~ "14-day average air temperature record"
     ) %>% sprintf("%s for %.1f°N, %.1f°W", ., loc$lat, loc$lng)
-    df <- weather %>%
-      filter(lat == loc$lat, lng == loc$lng) %>%
+    df <- loc_data()$weather %>%
       mutate(across(
-        c(min_temp, max_temp, mean_temp, gdd41, gdd50),
-        ~zoo::rollapply(.x, width = w, FUN = mean, na.rm = T, partial = T)))
+        all_of(smoothable_weather),
+        ~zoo::rollapply(.x, width = w, FUN = mean, na.rm = T, partial = T)
+      ))
 
-    df %>%
-      plot_ly() %>%
-      add_trace(
-        name = "Min temp",
-        x = ~date, y = ~min_temp,
-        type = "scatter", mode = "lines",
-        line = list(color = "cornflowerblue", shape = "spline"),
-        hovertemplate = "%{y:.1f}°F",
-        yaxis = "y1"
-      ) %>%
-      add_trace(
-        name = "Mean temp",
-        x = ~date, y = ~mean_temp,
-        type = "scatter", mode = "lines",
-        line = list(color = "orange", shape = "spline"),
-        hovertemplate = "%{y:.1f}°F",
-        yaxis = "y1"
-      ) %>%
-      add_trace(
-        name = "Max temp",
-        x = ~date, y = ~max_temp,
-        type = "scatter", mode = "lines",
-        line = list(color = "#c5050c", shape = "spline"),
-        hovertemplate = "%{y:.1f}°F",
-        yaxis = "y1"
-      ) %>%
-      add_trace(
-        name = "Frost (<32F)",
-        x = ~date, y = ~if_else(min_temp <= 32, 32, NA),
-        type = "scatter", mode = "lines",
-        line = list(color = "orchid"),
-        hovertemplate = "Yes"
-      ) %>%
-      add_trace(
-        name = "Hard freeze (<28F)",
-        x = ~date, y = ~if_else(min_temp <= 28, 28, NA),
-        type = "scatter", mode = "lines",
-        line = list(color = "purple"),
-        hovertemplate = "Yes"
-      ) %>%
-      # add_trace(
-      #   name = "GDD41 per day",
-      #   x = ~date, y = ~gdd41,
-      #   type = "scatter", mode = "lines",
-      #   line = list(color = "green"),
-      #   yaxis = "y2",
-      #   visible = "legendonly"
-      # ) %>%
-      # add_trace(
-      #   name = "GDD50 per day",
-      #   x = ~date, y = ~gdd50,
-      #   type = "scatter", mode = "lines",
-      #   line = list(color = "brown"),
-      #   yaxis = "y2",
-      #   visible = "legendonly"
-      # ) %>%
-      add_trace(
-        name = "GDD41 since Jan 1",
-        x = ~date, y = ~gdd41cum,
-        type = "scatter", mode = "lines",
-        line = list(color = "green"),
-        hovertemplate = "%{y:.1f}",
-        yaxis = "y2"
-      ) %>%
-      add_trace(
-        name = "GDD50 since Jan 1",
-        x = ~date, y = ~gdd50cum,
-        type = "scatter", mode = "lines",
-        line = list(color = "brown"),
-        hovertemplate = "%{y:.1f}",
-        yaxis = "y2"
-      ) %>%
+    plot_ly() %>%
       layout(
         title = plt_title,
         xaxis = list(
           title = "Date",
           domain = c(0, .9)),
-        yaxis = list(
-          title = "Temperature (F)",
-          zeroline = F),
-        yaxis2 = list(
-          title = "Growing degree days",
-          overlaying = "y",
-          side = "right"),
         hovermode = "x unified"
-      )
+      ) %>%
+      add_temp_traces(df, "y1") %>%
+      add_gdd_cum_traces(df, "y2")
   })
+
 
 
   ## climate_plot_ui ----
@@ -754,9 +700,8 @@ server <- function(input, output, session) {
         uiOutput("plot_smoothing_opts_ui")
       ),
       plotlyOutput("climate_plot"),
-      div(
-        class = "plot-caption",
-        "Click on any legend item in the plot to show or hide it. Today's date is indicated as a vertical dashed line. Climate data sourced from ", a("GridMET", href = "https://www.climatologylab.org/gridmet.html", .noWS = "outside"), "."
+      div(class = "plot-caption",
+        HTML("Click on any legend item in the plot to show or hide it. Today's date is indicated as a vertical dashed line. Climate data sourced from <a href='https://www.climatologylab.org/gridmet.html'>GridMET</a>.")
       )
     )
   })
@@ -777,71 +722,13 @@ server <- function(input, output, session) {
       "c10" ~ "10-year climate record (2013-2023)",
       "c5" ~ "5-year climate record (2018-2023)"
     ))
-    df <- climate[[p]] %>%
-      filter(lat == loc$lat, lng == loc$lng) %>%
+    df <- loc_data()[[p]] %>%
       mutate(across(
-        c(min_temp, max_temp, mean_temp, frost, freeze, frost_by, freeze_by),
+        all_of(smoothable_climate),
         ~zoo::rollapply(.x, width = w, FUN = mean, na.rm = T, partial = T))) %>%
       mutate(date = start_of_year() + yday - 1)
 
-    df %>%
-      plot_ly() %>%
-      add_trace(
-        name = "Min temp",
-        x = ~date, y = ~min_temp,
-        type = "scatter", mode = "lines",
-        line = list(color = "cornflowerblue", shape = "spline"),
-        hovertemplate = "%{y:.1f}°F",
-        yaxis = "y1"
-      ) %>%
-      add_trace(
-        name = "Mean temp",
-        x = ~date, y = ~mean_temp,
-        type = "scatter", mode = "lines",
-        line = list(color = "orange", shape = "spline"),
-        hovertemplate = "%{y:.1f}°F",
-        yaxis = "y1"
-      ) %>%
-      add_trace(
-        name = "Max temp",
-        x = ~date, y = ~max_temp,
-        type = "scatter", mode = "lines",
-        line = list(color = "#c5050c", shape = "spline"),
-        hovertemplate = "%{y:.1f}°F",
-        yaxis = "y1"
-      ) %>%
-      add_trace(
-        name = "Frost probability",
-        x = ~date, y = ~frost*100,
-        type = "scatter", mode = "lines",
-        line = list(color = "orchid", shape = "spline"),
-        hovertemplate = "%{y:.1f}%",
-        yaxis = "y2"
-      ) %>%
-      add_trace(
-        name = "Hard freeze probability",
-        x = ~date, y = ~freeze*100,
-        type = "scatter", mode = "lines",
-        hovertemplate = "%{y:.1f}%",
-        line = list(color = "purple", shape = "spline"),
-        yaxis = "y2"
-      ) %>%
-      add_trace(
-        name = "Cumul. frost prob.",
-        x = ~date, y = ~frost_by*100,
-        type = "scatter", mode = "lines",
-        hovertemplate = "%{y:.1f}%",
-        line = list(color = "orchid", shape = "spline", dash = "dot"),
-        yaxis = "y2"
-      ) %>%
-      add_trace(
-        name = "Cumul. freeze prob.",
-        x = ~date, y = ~freeze_by*100,
-        type = "scatter", mode = "lines",
-        hovertemplate = "%{y:.1f}%",
-        line = list(color = "purple", shape = "spline", dash = "dot"),
-        yaxis = "y2"
-      ) %>%
+    plot_ly() %>%
       layout(
         title = plt_title,
         xaxis = list(
@@ -850,12 +737,106 @@ server <- function(input, output, session) {
           tickformat = "%b",
           hoverformat = "%b %d (day %j)",
           domain = c(0, .95)),
-        yaxis = list(
-          title = "Temperature (F)"),
-        yaxis2 = list(
-          title = "Frost/freeze probability",
-          overlaying = "y",
-          side = "right"),
+        hovermode = "x unified",
+        shapes = list(
+          list(
+            type = "line",
+            x0 = Sys.Date(), x1 = Sys.Date(),
+            y0 = 0, y1 = 1, yref = "paper",
+            line = list(color = "black", dash = "dot"),
+            opacity = .5
+          )
+        )
+      ) %>%
+      add_temp_traces(df, "y1") %>%
+      add_frost_traces(df, "y2")
+  })
+
+
+  ## Custom plot ----
+
+  output$custom_plot_ui <- renderUI({
+    tagList(
+      wellPanel(
+        fluidRow(
+          column(
+            width = 6,
+            radioButtons(
+              inputId = "custom_plot_y1_elems",
+              label = "Primary plot elements",
+              choices = custom_plot_elems
+            ),
+            add_climate_period_ui("custom_plot_y1_climate_period"),
+            add_smoothing_ui("custom_plot_y1_smoothing", inline = F)
+          ),
+          column(
+            width = 6,
+            radioButtons(
+              inputId = "custom_plot_y2_elems",
+              label = "Secondary plot elements",
+              choices = append(
+                list("None" = "none"),
+                custom_plot_elems
+              )
+            ),
+            add_climate_period_ui("custom_plot_y2_climate_period"),
+            add_smoothing_ui("custom_plot_y2_smoothing", inline = F)
+          )
+        )
+      ),
+      plotlyOutput("custom_plot_plot"),
+      div(
+        class = "plot-caption",
+        "Click on any legend item in the plot to show or hide it. Weather data originally sourced from NOAA and retrieved from ", a("AgWeather", href = "https://agweather.cals.wisc.edu", .noWS = "outside"), "."
+      )
+    )
+  })
+
+  output$custom_plot_plot <- renderPlotly({
+    req(
+      input$custom_plot_y1_elems,
+      input$custom_plot_y2_elems,
+      input$custom_plot_y1_climate_period,
+      input$custom_plot_y2_climate_period,
+      input$custom_plot_y1_smoothing,
+      input$custom_plot_y2_smoothing
+    )
+
+    # capture inputs
+    elems <- list(
+      y1 = input$custom_plot_y1_elems,
+      y2 = input$custom_plot_y2_elems
+    )
+    i <- list(
+      y1 = list(
+        data = str_split_1(elems$y1, "_")[1],
+        traces = str_split_1(elems$y1, "_")[2],
+        climate = input$custom_plot_y1_climate_period,
+        smoothing = as.numeric(input$custom_plot_y1_smoothing)
+      ),
+      y2 = list(
+        data = str_split_1(elems$y2, "_")[1],
+        traces = str_split_1(elems$y2, "_")[2],
+        climate = input$custom_plot_y2_climate_period,
+        smoothing = as.numeric(input$custom_plot_y2_smoothing)
+      )
+    )
+    print(i)
+    if (identical(i$y1, i$y2)) {
+      elems$y2 <- "none"
+    }
+
+    # local vars
+    loc <- rv$selected_grid
+    plt_title <- sprintf("Weather/climate data for %.1f°N, %.1f°W", loc$lat, loc$lng)
+
+    # base plot
+    plt <- plot_ly() %>%
+      layout(
+        title = plt_title,
+        xaxis = list(
+          title = "Date",
+          domain = c(0, .9)),
         hovermode = "x unified",
         shapes = list(
           list(
@@ -867,6 +848,49 @@ server <- function(input, output, session) {
           )
         )
       )
+
+    for (axis in c("y1", "y2")) {
+      if (elems[[axis]] == "none") next
+
+      opts <- i[[axis]]
+      opts$dash <- FALSE
+      opts$label <- str_to_sentence(opts$data)
+
+      # if the same trace type on both sides so make 2nd dashed and don't repeat axis
+      if (axis == "y2" & i$y1$traces == i$y2$traces) {
+        opts$dash <- TRUE
+        axis <- "y1"
+      }
+
+      df <- if (opts$data == "weather") {
+        loc_data()$weather %>%
+          mutate(across(
+            all_of(smoothable_weather),
+            ~zoo::rollapply(.x, width = opts$smoothing, FUN = mean, na.rm = T, partial = T)
+          ))
+      } else {
+        loc_data()[[opts$climate]] %>%
+          mutate(across(
+            all_of(smoothable_climate),
+            ~zoo::rollapply(.x, width = opts$smoothing, FUN = mean, na.rm = T, partial = T)
+          ))
+      }
+
+      plt <-
+        if (opts$traces == "temp") {
+          add_temp_traces(plt, df, axis, opts$label, opts$dash)
+        } else if (opts$traces == "gdd") {
+          add_gdd_daily_traces(plt, df, axis, opts$label, opts$dash)
+        } else if (opts$traces == "gddcum") {
+          add_gdd_cum_traces(plt, df, axis, opts$label, opts$dash)
+        } else if (opts$traces == "frost") {
+          add_frost_traces(plt, df, axis)
+        } else {
+          plt
+        }
+    }
+    plt
   })
+
 
 }

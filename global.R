@@ -144,6 +144,7 @@ gdd_sine <- function(tmin, tmax, base, upper) {
   }
 }
 
+# converts the incoming json coordinates in the form '[lat, lng]' to cols
 fix_coords <- function(df) {
   df %>%
     mutate(
@@ -153,6 +154,17 @@ fix_coords <- function(df) {
       .after = name
     ) %>%
     select(-name)
+}
+
+coords_to_pt <- function(lat, lng) {
+  sprintf("%.1f %.1f", lat, lng)
+}
+
+pt_to_coords <- function(pt) {
+  list(
+    lat = as.numeric(str_split_i(pt, " ", 1)),
+    lng = as.numeric(str_split_i(pt, " ", 2))
+  )
 }
 
 withSpinnerProxy <- function(ui, ...) {
@@ -239,6 +251,229 @@ fill_weather <- function(dates = weather_dates()) {
 
   # build additional cols
   weather <<- weather %>% add_weather_cols()
+}
+
+
+## UI builders ----
+
+add_climate_period_ui <- function(id) {
+  radioButtons(
+    inputId = id,
+    label = "Climate period",
+    choices = list(
+      "10-year climate average (2013-2023)" = "c10",
+      "5-year climate average (2018-2023)" = "c5"
+    )
+  )
+}
+
+add_smoothing_ui <- function(id, inline = TRUE) {
+  radioButtons(
+    inputId = id,
+    label = "Data smoothing options",
+    choices = list(
+      "Daily observations (no smoothing)" = 1,
+      "Weekly rolling mean" = 7,
+      "14-day rolling mean" = 14
+    ),
+    inline = inline
+  )
+}
+
+
+## Plot helpers ----
+
+set_axis <- function(plt, yaxis, title) {
+  axis <-  list(
+    title = title,
+    zeroline = F
+  )
+  if (yaxis == "y1") {
+    plt %>% layout(yaxis = axis)
+  } else {
+    axis$overlaying = "y"
+    axis$side = "right"
+    plt %>% layout(yaxis2 = axis)
+  }
+}
+
+add_temp_traces <- function(plt, df, yaxis = "y1", label = "", dash = F) {
+  dash <- ifelse(dash, "dashdot", "none")
+  width <- 1
+
+  plt %>%
+    add_trace(
+      name = paste0(label, "Min temp"),
+      x = df$date, y = df$min_temp,
+      type = "scatter", mode = "lines",
+      line = list(
+        color = "cornflowerblue",
+        width = width,
+        shape = "spline",
+        dash = dash),
+      hovertemplate = "%{y:.1f}°F",
+      yaxis = yaxis
+    ) %>%
+    add_trace(
+      name = paste0(label, "Mean temp"),
+      x = df$date, y = df$mean_temp,
+      type = "scatter", mode = "lines",
+      line = list(
+        color = "orange",
+        width = width,
+        shape = "spline",
+        dash = dash),
+      hovertemplate = "%{y:.1f}°F",
+      yaxis = yaxis
+    ) %>%
+    add_trace(
+      name = paste0(label, "Max temp"),
+      x = df$date, y = df$max_temp,
+      type = "scatter", mode = "lines",
+      line = list(
+        color = "#c5050c",
+        width = width,
+        shape = "spline",
+        dash = dash),
+      hovertemplate = "%{y:.1f}°F",
+      yaxis = yaxis
+    ) %>%
+    add_trace(
+      name = paste0(label, "Frost (<32F)"),
+      x = df$date, y = if_else(df$min_temp <= 32, 32, NA),
+      type = "scatter", mode = "lines",
+      line = list(
+        color = "orchid",
+        width = width,
+        dash = dash),
+      hovertemplate = "Yes",
+      yaxis = yaxis
+    ) %>%
+    add_trace(
+      name = paste0(label, "Hard freeze (<28F)"),
+      x = df$date, y = if_else(df$min_temp <= 28, 28, NA),
+      type = "scatter", mode = "lines",
+      line = list(
+        color = "purple",
+        width = width,
+        dash = dash),
+      hovertemplate = "Yes",
+      yaxis = yaxis
+    ) %>%
+    set_axis(yaxis, "Temperature (F)")
+}
+
+add_gdd_daily_traces <- function(plt, df, yaxis = "y1", label = "", dash = F) {
+  dash <- ifelse(dash, "dashdot", "none")
+  width <- 1
+
+  plt %>%
+    add_trace(
+      name = paste(label, "GDD41/day"),
+      x = df$date, y = df$gdd41,
+      type = "scatter", mode = "lines",
+      line = list(
+        color = "green",
+        width = width,
+        dash = dash),
+      hovertemplate = "%{y:.1f}",
+      yaxis = yaxis
+    ) %>%
+    add_trace(
+      name = paste(label, "GDD50/day"),
+      x = df$date, y = df$gdd50,
+      type = "scatter", mode = "lines",
+      line = list(
+        color = "peru",
+        width = width,
+        dash = dash),
+      hovertemplate = "%{y:.1f}",
+      yaxis = yaxis
+    ) %>%
+    set_axis(yaxis, "GDD accumulation/day")
+}
+
+add_gdd_cum_traces <- function(plt, df, yaxis = "y1", label = "", dash = F) {
+  dash <- ifelse(dash, "dashdot", "none")
+  width <- 1
+
+  plt %>%
+    add_trace(
+      name = paste0(label, "GDD41 (cumul.)"),
+      x = df$date, y = df$gdd41cum,
+      type = "scatter", mode = "lines",
+      line = list(
+        color = "olivedrab",
+        width = width,
+        dash = dash),
+      hovertemplate = "%{y:.1f}",
+      yaxis = yaxis
+    ) %>%
+    add_trace(
+      name = paste0(label, "GDD50 (cumul.)"),
+      x = df$date, y = df$gdd50cum,
+      type = "scatter", mode = "lines",
+      line = list(
+        color = "chocolate",
+        width = width,
+        dash = dash),
+      hovertemplate = "%{y:.1f}",
+      yaxis = yaxis
+    ) %>%
+    set_axis(yaxis, "Cumulative GDD")
+}
+
+add_frost_traces <- function(plt, df, yaxis = "y1") {
+  width <- 1
+
+  plt %>%
+    add_trace(
+      name = "Frost probability",
+      x = df$date, y = df$frost*100,
+      type = "scatter", mode = "lines",
+      line = list(
+        color = "orchid",
+        width = width,
+        shape = "spline"),
+      hovertemplate = "%{y:.1f}%",
+      yaxis = yaxis
+    ) %>%
+    add_trace(
+      name = "Hard freeze probability",
+      x = df$date, y = df$freeze*100,
+      type = "scatter", mode = "lines",
+      hovertemplate = "%{y:.1f}%",
+      line = list(
+        color = "purple",
+        width = width,
+        shape = "spline"),
+      yaxis = yaxis
+    ) %>%
+    add_trace(
+      name = "Cumul. frost prob.",
+      x = df$date, y = df$frost_by*100,
+      type = "scatter", mode = "lines",
+      hovertemplate = "%{y:.1f}%",
+      line = list(
+        color = "orchid",
+        width = width,
+        shape = "spline",
+        dash = "dot"),
+      yaxis = yaxis
+    ) %>%
+    add_trace(
+      name = "Cumul. freeze prob.",
+      x = df$date, y = df$freeze_by*100,
+      type = "scatter", mode = "lines",
+      hovertemplate = "%{y:.1f}%",
+      line = list(
+        color = "purple",
+        width = width,
+        shape = "spline",
+        dash = "dot"),
+      yaxis = yaxis
+    ) %>%
+    set_axis(yaxis, "Frost/freeze probability")
 }
 
 
