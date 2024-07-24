@@ -25,6 +25,8 @@ server <- function(input, output, session) {
 
     # palette used for map grid
     grid_pal = NULL,
+
+    date_reset_nonce = rnorm(1)
   )
 
 
@@ -104,6 +106,12 @@ server <- function(input, output, session) {
 
     tagList(
       radioButtons(
+        inputId = "weather_year",
+        label = "Weather year",
+        choices = list(cur_yr, cur_yr - 1),
+        inline = T
+      ),
+      radioButtons(
         inputId = "weather_value",
         label = "Data value",
         choices = OPTS$grid_cols$weather
@@ -156,12 +164,35 @@ server <- function(input, output, session) {
   ### Weather/Comparison date ----
 
   output$weather_date_ui <- renderUI({
+    req(rv$date_reset_nonce)
+    req(input$weather_year)
+    req(input$weather_value)
+
+    prev_end <- isolate({
+      last(coalesce(input$weather_date, max(weather$date)))
+    })
+    min_date <- make_date(input$weather_year, 1, 1)
+    max_date <- min(make_date(input$weather_year, 12, 31), yesterday())
+    end_value <- min(min_date + yday(prev_end) - 1, yesterday())
+    value <- if (input$weather_value %in% c("gdd41cum", "gdd50cum")) {
+      start_value <- isolate({
+        if (length(input$weather_date) == 2) {
+          min_date + yday(input$weather_date[1]) - 1
+        } else {
+          min_date
+        }
+      })
+      c(start_value, end_value)
+    } else {
+      end_value
+    }
+
     sliderInput(
       inputId = "weather_date",
       label = "Date",
-      min = OPTS$start_date,
-      max = yesterday(),
-      value = coalesce(input$weather_date, max(weather$date)),
+      min = min_date,
+      max = max_date,
+      value = value,
       timeFormat = OPTS$weather_date_fmt
     )
   })
@@ -204,6 +235,8 @@ server <- function(input, output, session) {
   })
 
   move_date <- function(step) {
+    req(input$map_data_type)
+
     if (input$map_data_type == "climate") {
       id <- "climate_date"
       value <- clamp(
@@ -211,17 +244,45 @@ server <- function(input, output, session) {
         OPTS$climate_date_min,
         OPTS$climate_date_max
       )
-      fmt <- OPTS$climate_time_fmt
+      fmt <- OPTS$climate_date_fmt
     } else {
       id <- "weather_date"
+      dt <- input$weather_date
       value <- clamp(
-        input$weather_date + step,
-        OPTS$start_date,
-        OPTS$weather_date_max
+        last(dt) + step,
+        start_of_year(dt),
+        min(end_of_year(dt), OPTS$weather_date_max)
       )
-      fmt <- OPTS$weather_time_fmt
+      if (length(dt) == 2) value <- c(dt[1], value)
+      fmt <- OPTS$weather_date_fmt
     }
-    if (step == 0) value <- yesterday()
+    updateSliderInput(
+      inputId = id,
+      value = value,
+      timeFormat = fmt
+    )
+  }
+
+  reset_date <- function() {
+    req(input$map_data_type)
+
+    value <- if (input$map_data_type == "climate") {
+      id <- "climate_date"
+      max(weather$date)
+      fmt <- OPTS$climate_date_fmt
+    } else {
+      id <- "weather_date"
+      fmt <- OPTS$weather_date_fmt
+      if (length(input$weather_date) == 2) {
+        c(
+          start_of_year(input$weather_date[1]),
+          start_of_year(input$weather_date[1]) + yday(yesterday()) - 1
+        )
+      } else {
+        start_of_year(input$weather_date) + yday(yesterday()) - 1
+      }
+    }
+
     updateSliderInput(
       inputId = id,
       value = value,
@@ -233,7 +294,7 @@ server <- function(input, output, session) {
   observeEvent(input$date_earlier_7, move_date(-7))
   observeEvent(input$date_later_1, move_date(1))
   observeEvent(input$date_later_7, move_date(7))
-  observeEvent(input$date_reset, move_date(0))
+  observeEvent(input$date_reset, reset_date())
 
 
 
@@ -374,7 +435,7 @@ server <- function(input, output, session) {
     prefix <- setNames(names(cols), cols)[[opts$col]]
     .data %>% mutate(
       label = paste0(
-        "<b>",
+        str_glue("<b>{lat}°N, {lng}°W</b><br>"),
         if (opts$type == "weather" & opts$col %in% c("frost", "freeze")) {
           sprintf("%s: %s", prefix, value)
         } else if (opts$col %in% pct_cols) {
@@ -383,15 +444,55 @@ server <- function(input, output, session) {
           sprintf("%s: %+.1f", prefix, value)
         } else {
           sprintf("%s: %.1f", prefix, value)
-        },
-        "</b><br>",
-        str_glue("Location: {lat}°N, {lng}°W")
+        }
       )
     )
   }
 
 
   ## Assign grid data ----
+
+  prepare_weather_grid_data <- function(df, col, dt) {
+    if (length(dt) == 1) {
+      df %>%
+        filter(date == dt) %>%
+        rename(c("value" = col)) %>%
+        select(lat, lng, value)
+    } else if (length(dt) == 2) {
+      df1 <- df %>%
+        filter(date == dt[1]) %>%
+        rename(c("value1" = col)) %>%
+        select(lat, lng, value1)
+      df2 <- df %>%
+        filter(date == dt[2]) %>%
+        rename(c("value2" = col)) %>%
+        select(lat, lng, value2)
+      left_join(df1, df2, join_by(lat, lng)) %>%
+        mutate(value = value2 - value1) %>%
+        select(lat, lng, value)
+    }
+  }
+
+  prepare_climate_grid_data <- function(df, col, dt) {
+    if (length(dt) == 1) {
+      df %>%
+        filter(yday == yday(dt)) %>%
+        rename(c("value" = col)) %>%
+        select(lat, lng, value)
+    } else if (length(dt) == 2) {
+      df1 <- df %>%
+        filter(yday == yday(dt[1])) %>%
+        rename(c("value1" = col)) %>%
+        select(lat, lng, value1)
+      df2 <- df %>%
+        filter(yday == yday(dt[2])) %>%
+        rename(c("value2" = col)) %>%
+        select(lat, lng, value2)
+      left_join(df1, df2, join_by(lat, lng)) %>%
+        mutate(value = value2 - value1) %>%
+        select(lat, lng, value)
+    }
+  }
 
   observe({
     req(input$map_data_type)
@@ -410,9 +511,7 @@ server <- function(input, output, session) {
       opts$date <- input$weather_date
 
       weather %>%
-        filter(date == opts$date) %>%
-        rename(c("value" = opts$col)) %>%
-        select(lat, lng, value)
+        prepare_weather_grid_data(opts$col, opts$date)
 
     } else if (opts$type == "climate") {
 
@@ -425,9 +524,7 @@ server <- function(input, output, session) {
       opts$date <- input$climate_date
 
       climate[[opts$period]] %>%
-        filter(yday == yday(opts$date)) %>%
-        rename(c("value" = opts$col)) %>%
-        select(lat, lng, value)
+        prepare_climate_grid_data(opts$col, opts$date)
 
     } else if (opts$type == "comparison") {
 
@@ -440,13 +537,13 @@ server <- function(input, output, session) {
       opts$date <- input$weather_date
 
       wx <- weather %>%
-        filter(date == opts$date) %>%
-        rename(c("wx_value" = opts$col)) %>%
-        select(lat, lng, wx_value)
+        prepare_weather_grid_data(opts$col, opts$date) %>%
+        rename(c(wx_value = value))
+
       cl <- climate[[opts$period]] %>%
-        filter(yday == yday(opts$date)) %>%
-        rename(c("cl_value" = opts$col)) %>%
-        select(lat, lng, cl_value)
+        prepare_climate_grid_data(opts$col, opts$date) %>%
+        rename(c(cl_value = value))
+
       cl %>%
         left_join(wx, join_by(lat, lng)) %>%
         mutate(value = wx_value - cl_value)

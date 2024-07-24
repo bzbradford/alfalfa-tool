@@ -26,7 +26,7 @@ ui <- fluidPage(
     br(),
     div(
       style = "min-height: 400px;",
-      uiOutput("main_ui") %>% withSpinnerProxy(hide.ui = T)
+      uiOutput("main_ui") %>% withSpinnerProxy()
     ),
     tags$footer(
       id = "footer-content",
