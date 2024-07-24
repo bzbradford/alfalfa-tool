@@ -21,46 +21,72 @@ suppressMessages({
 
 # Defs ----
 
-MIN_LAT = 42.4
-MAX_LAT = 47.1
-MIN_LNG = -93.0
-MAX_LNG = -86.8
-START_DATE = as_date("2024-01-01")
-grid_cols <- list(
-  weather = list(
-    "Mean daily temp (F)" = "mean_temp",
-    "Min daily temp (F)" = "min_temp",
-    "Max daily temp (F)" = "max_temp",
-    "Daily GDD41 accumulation" = "gdd41",
-    "Daily GDD50 accumulation" = "gdd50",
-    "Cumulative GDD41 since Jan 1" = "gdd41cum",
-    "Cumulative GDD50 since Jan 1" = "gdd50cum"
-    # "Frost (<32F) this day" = "frost",
-    # "Hard freeze (<28F) this day" = "freeze"
+OPTS <- list(
+  min_lat = 42.4,
+  max_lat = 47.1,
+  min_lng = -93.0,
+  max_lng = -86.8,
+  start_date = as_date("2024-1-1"),
+  weather_date_fmt = "%b %d, %Y (day %j)",
+  climate_date_fmt = "%b %d (day %j)",
+  weather_date_max = NULL,
+  climate_date_min = NULL,
+  climate_date_max = NULL,
+  climate_period_choices = list(
+    "10-year climate average (2013-2023)" = "c10",
+    "5-year climate average (2018-2023)" = "c5"
   ),
-  climate = list(
-    "Mean daily temp (F)" = "mean_temp",
-    "Min daily temp (F)" = "min_temp",
-    "Max daily temp (F)" = "max_temp",
-    "Mean daily GDD41" = "gdd41",
-    "Mean daily GDD50" = "gdd50",
-    "Mean cumulative GDD41" = "gdd41cum",
-    "Mean cumulative GDD50" = "gdd50cum",
-    "Mean probability of frost on day" = "frost",
-    "Mean probability of hard freeze on day" = "freeze",
-    "Cumulative probability of frost" = "frost_by",
-    "Cumulative probability of hard freeze" = "freeze_by"
+  data_smoothing_choices = list(
+    "Daily values (no smoothing)" = 1,
+    "Weekly rolling mean" = 7,
+    "14-day rolling mean" = 14
   ),
-  comparison = list(
-    "Mean daily temp vs climate average (F)" = "mean_temp",
-    "Min daily temp vs climate average (F)" = "min_temp",
-    "Max daily temp vs climate average (F)" = "max_temp",
-    "Daily GDD41 vs climate average" = "gdd41",
-    "Daily GDD50 vs climate average" = "gdd50",
-    "Cumul. GDD41 vs climate average" = "gdd41cum",
-    "Cumul. GDD50 vs climate average" = "gdd50cum"
-  )
+  grid_cols = list(
+    weather = list(
+      "Mean daily temp (F)" = "mean_temp",
+      "Min daily temp (F)" = "min_temp",
+      "Max daily temp (F)" = "max_temp",
+      "Daily GDD41 accumulation" = "gdd41",
+      "Daily GDD50 accumulation" = "gdd50",
+      "Cumulative GDD41 since Jan 1" = "gdd41cum",
+      "Cumulative GDD50 since Jan 1" = "gdd50cum"
+    ),
+    climate = list(
+      "Mean daily temp (F)" = "mean_temp",
+      "Min daily temp (F)" = "min_temp",
+      "Max daily temp (F)" = "max_temp",
+      "Mean daily GDD41" = "gdd41",
+      "Mean daily GDD50" = "gdd50",
+      "Mean cumulative GDD41" = "gdd41cum",
+      "Mean cumulative GDD50" = "gdd50cum",
+      "Mean probability of frost on day" = "frost",
+      "Mean probability of hard freeze on day" = "freeze",
+      "Cumulative probability of frost" = "frost_by",
+      "Cumulative probability of hard freeze" = "freeze_by"
+    ),
+    comparison = list(
+      "Mean daily temp vs climate average (F)" = "mean_temp",
+      "Min daily temp vs climate average (F)" = "min_temp",
+      "Max daily temp vs climate average (F)" = "max_temp",
+      "Daily GDD41 vs climate average" = "gdd41",
+      "Daily GDD50 vs climate average" = "gdd50",
+      "Cumul. GDD41 vs climate average" = "gdd41cum",
+      "Cumul. GDD50 vs climate average" = "gdd50cum"
+    )
+  ),
+  custom_plot_elems = list(
+    "Weather - Temperature" = "weather_temp",
+    "Weather - GDD/day" = "weather_gdd",
+    "Weather - Cumulative GDD" = "weather_gddcum",
+    "Climate - Temperature" = "climate_temp",
+    "Climate - GDD/day" = "climate_gdd",
+    "Climate - Cumulative GDD" = "climate_gddcum",
+    "Climate - Frost/Freeze probability" = "climate_frost"
+  ),
+  smoothable_weather = c("min_temp", "max_temp", "mean_temp", "gdd41", "gdd50"),
+  smoothable_climate = c("min_temp", "max_temp", "mean_temp", "gdd41", "gdd50", "frost", "freeze", "frost_by", "freeze_by")
 )
+
 
 
 # Functions ----
@@ -203,7 +229,12 @@ add_weather_cols <- function(.data) {
 
 # units: temp=F, pressure=kPa, rh=%
 get_weather_grid <- function(date = yesterday()) {
-  url <- str_glue("https://agweather.cals.wisc.edu/api/weather/grid?lat_range={MIN_LAT},{MAX_LAT}&long_range={MIN_LNG},{MAX_LNG}&date={date}")
+  url <- paste0(
+    "https://agweather.cals.wisc.edu/api/weather/grid",
+    "?lat_range=", OPTS$min_lat, ",", OPTS$max_lat,
+    "&long_range=", OPTS$min_lng, ", ", OPTS$max_lng,
+    "&date=", date
+  )
   resp <- httr::GET(url) %>% httr::content()
   data <- resp$data %>%
     enframe() %>%
@@ -224,8 +255,7 @@ get_weather_grid <- function(date = yesterday()) {
 }
 
 weather_dates <- function() {
-  # message(str_glue("Checking weather data for {START_DATE} - {yesterday()}..."))
-  dates_need <- sort(seq.Date(START_DATE, yesterday(), 1))
+  dates_need <- sort(seq.Date(OPTS$start_date, yesterday(), 1))
   dates_have <- if (exists("weather")) sort(unique(weather$date))
   as.character(dates_need[!(dates_need %in% dates_have)])
 }
@@ -267,16 +297,15 @@ add_climate_period_ui <- function(id) {
   )
 }
 
-add_smoothing_ui <- function(id, inline = TRUE) {
-  radioButtons(
+add_smoothing_ui <- function(id) {
+  selectInput(
     inputId = id,
     label = "Data smoothing options",
     choices = list(
       "Daily observations (no smoothing)" = 1,
       "Weekly rolling mean" = 7,
       "14-day rolling mean" = 14
-    ),
-    inline = inline
+    )
   )
 }
 

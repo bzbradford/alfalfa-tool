@@ -41,3 +41,17 @@ a, a:hover, a:focus {
   text-align: center;
   font-style: italic;
 }
+
+.option-well {
+  padding: 10px 10px 0px 10px;
+  border: 1px solid transparent;
+  background: #ebf0f1;
+  border-radius: 4px;
+  margin-bottom: 15px;
+}
+
+.inline-flex {
+  display: inline-flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}

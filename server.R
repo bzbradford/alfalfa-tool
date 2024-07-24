@@ -2,14 +2,10 @@
 
 server <- function(input, output, session) {
 
-  OPTS <- list(
-    weather_date_min = START_DATE,
-    weather_date_max = yesterday(),
-    weather_time_fmt = "%b %d, %Y (day %j)",
-    climate_date_min = start_of_year(),
-    climate_date_max = end_of_year(),
-    climate_time_fmt = "%b %d (day %j)"
-  )
+  OPTS$weather_date_max = yesterday()
+  OPTS$climate_date_min = start_of_year()
+  OPTS$climate_date_max = end_of_year()
+
 
   # Reactive values ------------------------------------------------------------
 
@@ -110,8 +106,7 @@ server <- function(input, output, session) {
       radioButtons(
         inputId = "weather_value",
         label = "Data value",
-        choices = grid_cols$weather,
-        selected = grid_cols$weather[1]
+        choices = OPTS$grid_cols$weather
       ),
       uiOutput("weather_date_ui")
     )
@@ -128,8 +123,7 @@ server <- function(input, output, session) {
       radioButtons(
         inputId = "climate_value",
         label = "Data value",
-        choices = grid_cols$climate,
-        selected = grid_cols$climate[1]
+        choices = OPTS$grid_cols$climate
       ),
       uiOutput("climate_date_ui")
     )
@@ -145,16 +139,12 @@ server <- function(input, output, session) {
       radioButtons(
         inputId = "climate_period",
         label = "Climate period",
-        choices = list(
-          "10-year climate average (2013-2023)" = "c10",
-          "5-year climate average (2018-2023)" = "c5"
-        )
+        choices = OPTS$climate_period_choices
       ),
       radioButtons(
         inputId = "comparison_value",
         label = "Data value",
-        choices = grid_cols$comparison,
-        selected = grid_cols$comparison[1]
+        choices = OPTS$grid_cols$comparison
       ),
       uiOutput("weather_date_ui")
     )
@@ -169,10 +159,10 @@ server <- function(input, output, session) {
     sliderInput(
       inputId = "weather_date",
       label = "Date",
-      min = START_DATE,
+      min = OPTS$start_date,
       max = yesterday(),
       value = coalesce(input$weather_date, max(weather$date)),
-      timeFormat = OPTS$weather_time_fmt
+      timeFormat = OPTS$weather_date_fmt
     )
   })
 
@@ -186,7 +176,7 @@ server <- function(input, output, session) {
       min = start_of_year(),
       max = end_of_year(),
       value = coalesce(input$climate_date, max(weather$date)),
-      timeFormat = OPTS$climate_time_fmt
+      timeFormat = OPTS$climate_date_fmt
     )
   })
 
@@ -226,7 +216,7 @@ server <- function(input, output, session) {
       id <- "weather_date"
       value <- clamp(
         input$weather_date + step,
-        OPTS$weather_date_min,
+        OPTS$start_date,
         OPTS$weather_date_max
       )
       fmt <- OPTS$weather_time_fmt
@@ -380,7 +370,7 @@ server <- function(input, output, session) {
   # set grid labels
   # TODO: add other data to label?
   set_grid_labels <- function(.data, opts) {
-    cols <- grid_cols[[opts$type]]
+    cols <- OPTS$grid_cols[[opts$type]]
     prefix <- setNames(names(cols), cols)[[opts$col]]
     .data %>% mutate(
       label = paste0(
@@ -577,19 +567,6 @@ server <- function(input, output, session) {
 
   # PLOTS & DATA ---------------------------------------------------------------
 
-  custom_plot_elems <- list(
-    "Weather - Temperature" = "weather_temp",
-    "Weather - GDD/day" = "weather_gdd",
-    "Weather - Cumulative GDD" = "weather_gddcum",
-    "Climate - Temperature" = "climate_temp",
-    "Climate - GDD/day" = "climate_gdd",
-    "Climate - Cumulative GDD" = "climate_gddcum",
-    "Climate - Frost/Freeze probability" = "climate_frost"
-  )
-
-  smoothable_weather <- c("min_temp", "max_temp", "mean_temp", "gdd41", "gdd50", "gdd41cum", "gdd50cum")
-  smoothable_climate <- c(smoothable_weather, "frost", "freeze", "frost_by", "freeze_by")
-
 
   ## Set local data ----
 
@@ -618,10 +595,28 @@ server <- function(input, output, session) {
     tagList(
       uiOutput("selected_grid_ui"),
       tabsetPanel(
-        tabPanel("Weather plot", uiOutput("weather_plot_ui")),
-        tabPanel("Climate plot", uiOutput("climate_plot_ui")),
-        tabPanel("Custom plot", uiOutput("custom_plot_ui")),
-        tabPanel("Alfalfa cutting risk")
+        tabPanel(
+          "Weather plot",
+          div(
+            style = "min-height: 575px;",
+            uiOutput("weather_plot_ui")
+          )
+        ),
+        tabPanel(
+          "Climate plot",
+          div(
+            style = "min-height: 640px;",
+            uiOutput("climate_plot_ui")
+          )
+        ),
+        tabPanel(
+          "Custom plot",
+          div(
+            style = "min-height: 760px;",
+            uiOutput("custom_plot_ui")
+          )
+        )
+        # tabPanel("Alfalfa cutting risk")
       )
     )
   })
@@ -637,8 +632,13 @@ server <- function(input, output, session) {
 
   output$weather_plot_ui <- renderUI({
     tagList(
-      wellPanel(
-        add_smoothing_ui("weather_plot_smoothing"),
+      div(class = "option-well",
+        radioButtons(
+          inputId = "weather_plot_smoothing",
+          label = "Data smoothing options",
+          choices = OPTS$data_smoothing_choices,
+          inline = T
+        )
       ),
       plotlyOutput("weather_plot"),
       div(class = "plot-caption", HTML("Click on any legend item in the plot to show or hide it. Weather data originally sourced from NOAA and retrieved from <a href='https://agweather.cals.wisc.edu/'>AgWeather</a>."))
@@ -651,22 +651,31 @@ server <- function(input, output, session) {
     loc <- rv$selected_grid
     w <- as.numeric(input$weather_plot_smoothing)
     plt_title <- case_match(w,
-      1 ~ "Weather record",
-      7 ~ "7-day average weather record",
-      14 ~ "14-day average air temperature record"
-    ) %>% sprintf("%s for %.1f°N, %.1f°W", ., loc$lat, loc$lng)
+      1 ~ "Weather data",
+      7 ~ "7-day average weather data",
+      14 ~ "14-day average air temperature data"
+    ) %>% sprintf("<b>%s for %.1f°N, %.1f°W</b>", ., loc$lat, loc$lng)
     df <- loc_data()$weather %>%
       mutate(across(
-        all_of(smoothable_weather),
+        all_of(OPTS$smoothable_weather),
         ~zoo::rollapply(.x, width = w, FUN = mean, na.rm = T, partial = T)
       ))
 
     plot_ly() %>%
       layout(
-        title = plt_title,
+        title = list(
+          text = plt_title,
+          font = list(
+            family = "Lato",
+            size = 18)),
+        legend = list(
+          title = list(
+            text = "<b>Plot elements</b>",
+            size = 14)),
         xaxis = list(
           title = "Date",
-          domain = c(0, .9)),
+          hoverformat = "%b %d, %Y (day %j)",
+          domain = c(0, .95)),
         hovermode = "x unified"
       ) %>%
       add_temp_traces(df, "y1") %>%
@@ -674,30 +683,24 @@ server <- function(input, output, session) {
   })
 
 
+  ## Climate plot ----
 
-  ## climate_plot_ui ----
   output$climate_plot_ui <- renderUI({
     tagList(
-      wellPanel(
+      div(class = "option-well",
         radioButtons(
           inputId = "climate_plot_period",
           label = "Climate dataset",
-          choices = list(
-            "10-year climate (2013-2023)" = "c10",
-            "5-year climate (2018-2023)" = "c5"),
+          choices = OPTS$climate_period_choices,
           inline = TRUE
         ),
         radioButtons(
           inputId = "climate_plot_smoothing",
-          label = "Temperature smoothing options",
-          choices = list(
-            "Daily climate average" = 1,
-            "Weekly rolling mean" = 7,
-            "14-day rolling mean" = 14),
+          label = "Data smoothing options",
+          choices = OPTS$data_smoothing_choices,
           selected = 7,
           inline = T
-        ),
-        uiOutput("plot_smoothing_opts_ui")
+        )
       ),
       plotlyOutput("climate_plot"),
       div(class = "plot-caption",
@@ -706,7 +709,6 @@ server <- function(input, output, session) {
     )
   })
 
-  ## climate_plot ----
   output$climate_plot <- renderPlotly({
     req(input$climate_plot_period)
     req(input$climate_plot_smoothing)
@@ -719,18 +721,26 @@ server <- function(input, output, session) {
       7 ~ "7-day average",
       14 ~ "14-day average"
     ) %>% paste(case_match(p,
-      "c10" ~ "10-year climate record (2013-2023)",
-      "c5" ~ "5-year climate record (2018-2023)"
-    ))
+      "c10" ~ "10-year climate data (2013-2023)",
+      "c5" ~ "5-year climate data (2018-2023)"
+    )) %>% sprintf("<b>%s</b>", .)
     df <- loc_data()[[p]] %>%
       mutate(across(
-        all_of(smoothable_climate),
+        all_of(OPTS$smoothable_climate),
         ~zoo::rollapply(.x, width = w, FUN = mean, na.rm = T, partial = T))) %>%
       mutate(date = start_of_year() + yday - 1)
 
     plot_ly() %>%
       layout(
-        title = plt_title,
+        title = list(
+          text = plt_title,
+          font = list(
+            family = "Lato",
+            size = 18)),
+        legend = list(
+          title = list(
+            text = "<b>Plot elements</b>",
+            size = 14)),
         xaxis = list(
           title = "Date",
           dtick = "M1",
@@ -757,42 +767,58 @@ server <- function(input, output, session) {
 
   output$custom_plot_ui <- renderUI({
     tagList(
-      wellPanel(
-        fluidRow(
-          column(
-            width = 6,
-            radioButtons(
+      div(
+        h4("Primary plot elements"),
+        div(class = "option-well",
+          div(class = "inline-flex",
+            selectInput(
               inputId = "custom_plot_y1_elems",
-              label = "Primary plot elements",
-              choices = custom_plot_elems
+              label = "Plot data",
+              choices = OPTS$custom_plot_elems
             ),
-            add_climate_period_ui("custom_plot_y1_climate_period"),
-            add_smoothing_ui("custom_plot_y1_smoothing", inline = F)
-          ),
-          column(
-            width = 6,
-            radioButtons(
-              inputId = "custom_plot_y2_elems",
-              label = "Secondary plot elements",
-              choices = append(
-                list("None" = "none"),
-                custom_plot_elems
-              )
+            selectInput(
+              inputId = "custom_plot_y1_climate_period",
+              label = "Climate period (if applicable)",
+              choices = OPTS$climate_period_choices
             ),
-            add_climate_period_ui("custom_plot_y2_climate_period"),
-            add_smoothing_ui("custom_plot_y2_smoothing", inline = F)
+            selectInput(
+              inputId = "custom_plot_y1_smoothing",
+              label = "Data smoothing",
+              choices = OPTS$data_smoothing_choices
+            ),
           )
         )
       ),
-      plotlyOutput("custom_plot_plot"),
       div(
-        class = "plot-caption",
-        "Click on any legend item in the plot to show or hide it. Weather data originally sourced from NOAA and retrieved from ", a("AgWeather", href = "https://agweather.cals.wisc.edu", .noWS = "outside"), "."
-      )
+        h4("Secondary plot elements"),
+        div(class = "option-well",
+          div(class = "inline-flex",
+            selectInput(
+              inputId = "custom_plot_y2_elems",
+              label = "Plot data",
+              choices = append(list("None" = "none"), OPTS$custom_plot_elems)
+            ),
+            selectInput(
+              inputId = "custom_plot_y2_climate_period",
+              label = "Climate period (if applicable)",
+              choices = OPTS$climate_period_choices
+            ),
+            selectInput(
+              inputId = "custom_plot_y2_smoothing",
+              label = "Data smoothing",
+              choices = OPTS$data_smoothing_choices
+            )
+          )
+        )
+      ),
+      br(),
+      plotlyOutput("custom_plot"),
+      div(class = "plot-caption", HTML("Click on any legend item in the plot to show or hide it. Today's date is indicated as a vertical dashed line. Weather data originally sourced from NOAA and retrieved from <a href='https://agweather.cals.wisc.edu'>AgWeather</a>, climate data sourced from <a href='https://www.climatologylab.org/gridmet.html'>GridMET</a>."))
     )
   })
 
-  output$custom_plot_plot <- renderPlotly({
+
+  output$custom_plot <- renderPlotly({
     req(
       input$custom_plot_y1_elems,
       input$custom_plot_y2_elems,
@@ -821,22 +847,31 @@ server <- function(input, output, session) {
         smoothing = as.numeric(input$custom_plot_y2_smoothing)
       )
     )
-    print(i)
+
     if (identical(i$y1, i$y2)) {
       elems$y2 <- "none"
     }
 
     # local vars
     loc <- rv$selected_grid
-    plt_title <- sprintf("Weather/climate data for %.1f°N, %.1f°W", loc$lat, loc$lng)
+    plt_title <- sprintf("<b>Weather/climate data for %.1f°N, %.1f°W</b>", loc$lat, loc$lng)
 
     # base plot
     plt <- plot_ly() %>%
       layout(
-        title = plt_title,
+        title = list(
+          text = plt_title,
+          font = list(
+            family = "Lato",
+            size = 18)),
+        legend = list(
+          title = list(
+            text = "<b>Plot elements</b>",
+            size = 14)),
         xaxis = list(
           title = "Date",
-          domain = c(0, .9)),
+          hoverformat = "%b %d, %Y (day %j)",
+          domain = c(0, .95)),
         hovermode = "x unified",
         shapes = list(
           list(
@@ -849,12 +884,21 @@ server <- function(input, output, session) {
         )
       )
 
+    # add traces as necessary
     for (axis in c("y1", "y2")) {
       if (elems[[axis]] == "none") next
 
       opts <- i[[axis]]
       opts$dash <- FALSE
-      opts$label <- str_to_sentence(opts$data)
+      opts$label <- {
+        str <- str_to_sentence(opts$data)
+        info <- paste(c(
+          if (opts$data == "climate") list(c10 = "10-year", c5 = "5-year")[[opts$climate]],
+          if (opts$smoothing != 1) paste0(opts$smoothing, "-day")
+        ), collapse = ", ")
+        if (info != "") info <- paste0("(", info, ")")
+        paste(str, info, "- ")
+      }
 
       # if the same trace type on both sides so make 2nd dashed and don't repeat axis
       if (axis == "y2" & i$y1$traces == i$y2$traces) {
@@ -862,20 +906,22 @@ server <- function(input, output, session) {
         axis <- "y1"
       }
 
+      # apply smoothing
       df <- if (opts$data == "weather") {
         loc_data()$weather %>%
           mutate(across(
-            all_of(smoothable_weather),
+            all_of(OPTS$smoothable_weather),
             ~zoo::rollapply(.x, width = opts$smoothing, FUN = mean, na.rm = T, partial = T)
           ))
       } else {
         loc_data()[[opts$climate]] %>%
           mutate(across(
-            all_of(smoothable_climate),
+            all_of(OPTS$smoothable_climate),
             ~zoo::rollapply(.x, width = opts$smoothing, FUN = mean, na.rm = T, partial = T)
           ))
       }
 
+      # add traces
       plt <-
         if (opts$traces == "temp") {
           add_temp_traces(plt, df, axis, opts$label, opts$dash)
