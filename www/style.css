@@ -30,6 +30,7 @@ a, a:hover, a:focus {
   display: inline-flex;
   width: 100%;
   gap: 5px;
+  margin-bottom: 1em;
 }
 
 .date-btns > button {
@@ -54,4 +55,8 @@ a, a:hover, a:focus {
   display: inline-flex;
   gap: 20px;
   flex-wrap: wrap;
+}
+
+.map-display-opts > * > .checkbox {
+  margin: 0;
 }

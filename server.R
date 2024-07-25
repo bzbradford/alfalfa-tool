@@ -7,27 +7,32 @@ server <- function(input, output, session) {
   OPTS$climate_date_max = end_of_year()
 
 
-  # Reactive values ------------------------------------------------------------
+  # Reactive values ----
 
   rv <- reactiveValues(
 
     # false if new weather data needs downloading
     weather_ready = length(weather_dates()) == 0,
 
-    # false until any grid point is selected
-    selection_ready = FALSE,
-
-    # lat/lng of selected grid cell
     selected_grid = NULL,
+    selected_grid_ready = FALSE
 
-    # dataset for map grid
-    grid_data = NULL,
-
-    # palette used for map grid
-    grid_pal = NULL,
-
-    date_reset_nonce = rnorm(1)
   )
+
+  # initialize module servers ----
+
+  mapServerValues <- mapServer()
+
+  observe({
+    print(mapServerValues())
+    rv$selected_grid <- mapServerValues()$selected_grid
+  })
+
+  observe({
+    if (!is.null(rv$selected_grid)) {
+      rv$selected_grid_ready <- TRUE
+    }
+  })
 
 
   # MAIN UI --------------------------------------------------------------------
@@ -37,26 +42,7 @@ server <- function(input, output, session) {
     req(rv$weather_ready)
 
     tagList(
-      fluidRow(
-        column(8,
-          leafletOutput("map", width = "100%", height = "720px")
-        ),
-        column(4,
-          div(
-            class = "well", style = "margin-bottom: 0;",
-            radioButtons(
-              inputId = "map_data_type",
-              label = "Choose data layer",
-              choices = list(
-                "Current weather" = "weather",
-                "Climate normals" = "climate",
-                "Weather vs climate" = "comparison"
-              )
-            ),
-            uiOutput("map_opts_ui")
-          )
-        )
-      ),
+      mapUI(),
       div(
         h3(
           style = "margin-top: 1em;",
@@ -76,594 +62,8 @@ server <- function(input, output, session) {
   })
 
 
-  # MAP OPTIONS UI -------------------------------------------------------------
-
-  ## Map data type selector ----
-  output$map_opts_ui <- renderUI({
-    req(input$map_data_type)
-    type <- input$map_data_type
-
-    leafletProxy("map") %>%
-      clearGroup(layers$grid)
-
-    tagList(
-      if (type == "weather") {
-        uiOutput("weather_opts_ui")
-      } else if (type == "climate") {
-        uiOutput("climate_opts_ui")
-      } else if (type == "comparison") {
-        uiOutput("comparison_opts_ui")
-      },
-      uiOutput("date_btns_ui")
-    )
-  })
-
-
-  ## Weather options ----
-
-  output$weather_opts_ui <- renderUI({
-    req(input$map_data_type)
-
-    tagList(
-      radioButtons(
-        inputId = "weather_year",
-        label = "Weather year",
-        choices = list(cur_yr, cur_yr - 1),
-        inline = T
-      ),
-      radioButtons(
-        inputId = "weather_value",
-        label = "Data value",
-        choices = OPTS$grid_cols$weather
-      ),
-      uiOutput("weather_date_ui")
-    )
-  })
-
-
-  ## Climate options ----
-
-  output$climate_opts_ui <- renderUI({
-    req(input$map_data_type)
-
-    tagList(
-      add_climate_period_ui("climate_period"),
-      radioButtons(
-        inputId = "climate_value",
-        label = "Data value",
-        choices = OPTS$grid_cols$climate
-      ),
-      uiOutput("climate_date_ui")
-    )
-  })
-
-
-  ## Comparison options ----
-
-  output$comparison_opts_ui <- renderUI({
-    req(input$map_data_type)
-
-    tagList(
-      radioButtons(
-        inputId = "climate_period",
-        label = "Climate period",
-        choices = OPTS$climate_period_choices
-      ),
-      radioButtons(
-        inputId = "comparison_value",
-        label = "Data value",
-        choices = OPTS$grid_cols$comparison
-      ),
-      uiOutput("weather_date_ui")
-    )
-  })
-
-
-  ## Date selector ----
-
-  ### Weather/Comparison date ----
-
-  output$weather_date_ui <- renderUI({
-    req(rv$date_reset_nonce)
-    req(input$weather_year)
-    req(input$weather_value)
-
-    prev_end <- isolate({
-      last(coalesce(input$weather_date, max(weather$date)))
-    })
-    min_date <- make_date(input$weather_year, 1, 1)
-    max_date <- min(make_date(input$weather_year, 12, 31), yesterday())
-    end_value <- min(min_date + yday(prev_end) - 1, yesterday())
-    value <- if (input$weather_value %in% c("gdd41cum", "gdd50cum")) {
-      start_value <- isolate({
-        if (length(input$weather_date) == 2) {
-          min_date + yday(input$weather_date[1]) - 1
-        } else {
-          min_date
-        }
-      })
-      c(start_value, end_value)
-    } else {
-      end_value
-    }
-
-    sliderInput(
-      inputId = "weather_date",
-      label = "Date",
-      min = min_date,
-      max = max_date,
-      value = value,
-      timeFormat = OPTS$weather_date_fmt
-    )
-  })
-
-
-  ### Climate date ----
-
-  output$climate_date_ui <- renderUI({
-    sliderInput(
-      inputId = "climate_date",
-      label = "Date",
-      min = start_of_year(),
-      max = end_of_year(),
-      value = coalesce(input$climate_date, max(weather$date)),
-      timeFormat = OPTS$climate_date_fmt
-    )
-  })
-
-
-  ### Date adjustment buttons ----
-
-  output$date_btns_ui <- renderUI({
-    req(input$map_data_type)
-
-    tagList(
-      tags$label(
-        "for" = "date-btns",
-        "Date adjustment"
-      ),
-      div(
-        class = "date-btns",
-        id = "date-btns",
-        actionButton("date_earlier_7", "-7"),
-        actionButton("date_earlier_1", "-1"),
-        actionButton("date_later_1", "+1"),
-        actionButton("date_later_7", "+7"),
-        actionButton("date_reset", "Reset"),
-      )
-    )
-  })
-
-  move_date <- function(step) {
-    req(input$map_data_type)
-
-    if (input$map_data_type == "climate") {
-      id <- "climate_date"
-      value <- clamp(
-        input$climate_date + step,
-        OPTS$climate_date_min,
-        OPTS$climate_date_max
-      )
-      fmt <- OPTS$climate_date_fmt
-    } else {
-      id <- "weather_date"
-      dt <- input$weather_date
-      value <- clamp(
-        last(dt) + step,
-        start_of_year(dt),
-        min(end_of_year(dt), OPTS$weather_date_max)
-      )
-      if (length(dt) == 2) value <- c(dt[1], value)
-      fmt <- OPTS$weather_date_fmt
-    }
-    updateSliderInput(
-      inputId = id,
-      value = value,
-      timeFormat = fmt
-    )
-  }
-
-  reset_date <- function() {
-    req(input$map_data_type)
-
-    value <- if (input$map_data_type == "climate") {
-      id <- "climate_date"
-      max(weather$date)
-      fmt <- OPTS$climate_date_fmt
-    } else {
-      id <- "weather_date"
-      fmt <- OPTS$weather_date_fmt
-      if (length(input$weather_date) == 2) {
-        c(
-          start_of_year(input$weather_date[1]),
-          start_of_year(input$weather_date[1]) + yday(yesterday()) - 1
-        )
-      } else {
-        start_of_year(input$weather_date) + yday(yesterday()) - 1
-      }
-    }
-
-    updateSliderInput(
-      inputId = id,
-      value = value,
-      timeFormat = fmt
-    )
-  }
-
-  observeEvent(input$date_earlier_1, move_date(-1))
-  observeEvent(input$date_earlier_7, move_date(-7))
-  observeEvent(input$date_later_1, move_date(1))
-  observeEvent(input$date_later_7, move_date(7))
-  observeEvent(input$date_reset, reset_date())
-
-
-
-  # MAP RENDERING --------------------------------------------------------------
-
-  basemaps <- tribble(
-    ~label, ~provider,
-    "ESRI Topo", providers$Esri.WorldTopoMap,
-    "Satellite", providers$Esri.WorldImagery,
-    "OpenStreetMap", providers$OpenStreetMap,
-    "Grey Canvas", providers$CartoDB.Positron
-  )
-
-  addBasemaps <- function(map) {
-    for (r in 1:nrow(basemaps)) {
-      df <- slice(basemaps, r)
-      map <- addProviderTiles(map, df$provider, group = df$label)
-    }
-    map
-  }
-
-  layers <- list(
-    counties = "Counties/Regions",
-    grid = "Data grid"
-  )
-
-
-  ## Initialize map ----
-
-  output$map <- renderLeaflet({
-    leaflet() %>%
-      fitBounds(
-        lat1 = 42.4,
-        lat2 = 47.1,
-        lng1 = -92.9,
-        lng2 = -86.8
-      ) %>%
-      addBasemaps() %>%
-      addMapPane("counties", 410) %>%
-      addMapPane("grid", 420) %>%
-      addMapPane("selected_grid", 430) %>%
-      addLayersControl(
-        baseGroups = basemaps$label,
-        overlayGroups = unlist(layers, use.names = F),
-        options = layersControlOptions(collapsed = F)
-      ) %>%
-      addFullscreenControl(pseudoFullscreen = T) %>%
-      addEasyButtonBar(
-        easyButton(
-          position = "topleft",
-          icon = "fa-crosshairs",
-          title = "Show my location on the map",
-          onClick = JS("
-            function(btn, map) {
-              map.locate({
-                setView: true,
-                enableHighAccuracy: false,
-                maxZoom: 10
-              }).on('locationfound', (event) => {
-                Shiny.setInputValue('user_loc', event.latlng, {priority: 'event'})
-              })
-            }
-          ")
-        ),
-        easyButton(
-          position = "topleft",
-          icon = "fa-globe",
-          title = "Reset map view",
-          onClick = JS("
-            function(btn, map) {
-              map.fitBounds([[47.1, -86.8], [42.4, -92.9]])
-            }
-          ")
-        )
-      ) %>%
-      suspendScroll(
-        sleepTime = 0,
-        wakeTime = 1000,
-        hoverToWake = T,
-        sleepNote = F,
-        sleepOpacity = 1
-      ) %>%
-      addPolygons(
-        data = counties,
-        group = layers$counties,
-        label = ~ lapply(paste0("<b>", CountyName, " County</b><br>", DnrRegion), HTML),
-        fillOpacity = 0.1,
-        color = "grey",
-        opacity = 0.5,
-        fillColor = ~ colorFactor("Dark2", counties$DnrRegion)(DnrRegion),
-        weight = 1,
-        options = pathOptions(pane = "counties")
-      )
-  })
-
-
-  ## Hide the legend ----
-
-  observeEvent(TRUE, {
-    delay(3000, {
-      leafletProxy("map") %>%
-        addLayersControl(
-          baseGroups = basemaps$label,
-          overlayGroups = unlist(layers, use.names = FALSE),
-        )
-    })
-  })
-
-
-  ## Set grid data ----
-
-  pct_cols <- c("frost", "freeze", "frost_by", "freeze_by")
-
-  # set grid color palette
-  set_grid_fill <- function(.data, opts) {
-    comp_cols <- c("min_temp", "max_temp", "gdd41", "gdd50")
-    vals <- .data$value
-    pal <- if (opts$col %in% pct_cols) {
-      # percent frost/freeze
-      colorNumeric("Blues", c(0, 1), reverse = T)
-    } else {
-      if (opts$type == "comparison" & opts$col %in% comp_cols) {
-        # +/- comparisons vs climate. Centered on zero
-        colorNumeric("Spectral", c(-max(abs(vals)), max(abs(vals))), reverse = T)
-      } else {
-        colorNumeric("Spectral", vals, reverse = T)
-      }
-    }
-    rv$grid_pal <- pal
-    .data %>%
-      mutate(fill = pal(value))
-  }
-
-  # set grid labels
-  # TODO: add other data to label?
-  set_grid_labels <- function(.data, opts) {
-    cols <- OPTS$grid_cols[[opts$type]]
-    prefix <- setNames(names(cols), cols)[[opts$col]]
-    .data %>% mutate(
-      label = paste0(
-        str_glue("<b>{lat}°N, {lng}°W</b><br>"),
-        if (opts$type == "weather" & opts$col %in% c("frost", "freeze")) {
-          sprintf("%s: %s", prefix, value)
-        } else if (opts$col %in% pct_cols) {
-          sprintf("%s: %.1f%%", prefix, value * 100)
-        } else if (opts$type == "comparison") {
-          sprintf("%s: %+.1f", prefix, value)
-        } else {
-          sprintf("%s: %.1f", prefix, value)
-        }
-      )
-    )
-  }
-
-
-  ## Assign grid data ----
-
-  prepare_weather_grid_data <- function(df, col, dt) {
-    if (length(dt) == 1) {
-      df %>%
-        filter(date == dt) %>%
-        rename(c("value" = col)) %>%
-        select(lat, lng, value)
-    } else if (length(dt) == 2) {
-      df1 <- df %>%
-        filter(date == dt[1]) %>%
-        rename(c("value1" = col)) %>%
-        select(lat, lng, value1)
-      df2 <- df %>%
-        filter(date == dt[2]) %>%
-        rename(c("value2" = col)) %>%
-        select(lat, lng, value2)
-      left_join(df1, df2, join_by(lat, lng)) %>%
-        mutate(value = value2 - value1) %>%
-        select(lat, lng, value)
-    }
-  }
-
-  prepare_climate_grid_data <- function(df, col, dt) {
-    if (length(dt) == 1) {
-      df %>%
-        filter(yday == yday(dt)) %>%
-        rename(c("value" = col)) %>%
-        select(lat, lng, value)
-    } else if (length(dt) == 2) {
-      df1 <- df %>%
-        filter(yday == yday(dt[1])) %>%
-        rename(c("value1" = col)) %>%
-        select(lat, lng, value1)
-      df2 <- df %>%
-        filter(yday == yday(dt[2])) %>%
-        rename(c("value2" = col)) %>%
-        select(lat, lng, value2)
-      left_join(df1, df2, join_by(lat, lng)) %>%
-        mutate(value = value2 - value1) %>%
-        select(lat, lng, value)
-    }
-  }
-
-  observe({
-    req(input$map_data_type)
-
-    opts = list(
-      type = input$map_data_type
-    )
-
-    # set grid data
-    grid <- if (opts$type == "weather") {
-
-      req(input$weather_value)
-      req(input$weather_date)
-
-      opts$col <- input$weather_value
-      opts$date <- input$weather_date
-
-      weather %>%
-        prepare_weather_grid_data(opts$col, opts$date)
-
-    } else if (opts$type == "climate") {
-
-      req(input$climate_period)
-      req(input$climate_value)
-      req(input$climate_date)
-
-      opts$period <- input$climate_period
-      opts$col <- input$climate_value
-      opts$date <- input$climate_date
-
-      climate[[opts$period]] %>%
-        prepare_climate_grid_data(opts$col, opts$date)
-
-    } else if (opts$type == "comparison") {
-
-      req(input$climate_period)
-      req(input$comparison_value)
-      req(input$weather_date)
-
-      opts$period <- input$climate_period
-      opts$col <- input$comparison_value
-      opts$date <- input$weather_date
-
-      wx <- weather %>%
-        prepare_weather_grid_data(opts$col, opts$date) %>%
-        rename(c(wx_value = value))
-
-      cl <- climate[[opts$period]] %>%
-        prepare_climate_grid_data(opts$col, opts$date) %>%
-        rename(c(cl_value = value))
-
-      cl %>%
-        left_join(wx, join_by(lat, lng)) %>%
-        mutate(value = wx_value - cl_value)
-    }
-
-    rv$grid_data <- grid %>%
-      mutate(grid_pt = coords_to_pt(lat, lng)) %>%
-      set_grid_fill(opts) %>%
-      set_grid_labels(opts)
-  })
-
-
-  ## Draw grid ----
-
-  observe({
-    map <- leafletProxy("map")
-    grid <- rv$grid_data
-
-    if (is.null(grid)) {
-      map %>%
-        clearGroup(layers$grid) %>%
-        removeControl("legend")
-    } else {
-      map %>%
-        addRectangles(
-          data = grid,
-          lat1 = ~lat - .05, lat2 = ~lat + .05,
-          lng1 = ~lng - .05, lng2 = ~lng + .05,
-          group = layers$grid,
-          layerId = ~grid_pt,
-          weight = 0,
-          fillOpacity = .75,
-          fillColor = ~fill,
-          label = ~lapply(label, shiny::HTML),
-          options = pathOptions(pane = "grid")
-        ) %>%
-        addLegend(
-          layerId = "legend",
-          position = "bottomright",
-          pal = rv$grid_pal,
-          bins = 5,
-          values = grid$value
-        )
-    }
-  })
-
-
-  ## Set selected point on map click ----
-
-  observeEvent(input$map_shape_click, {
-    id <- input$map_shape_click$id
-    req(id)
-    if (id == "selected") return()
-    rv$selected_grid <- pt_to_coords(id)
-  })
-
-
-  ## Draw selected grid on map ----
-
-  observe({
-    map <- leafletProxy("map")
-
-    if (is.null(rv$selected_grid)) {
-      map %>% removeShape("selected_grid")
-      return()
-    }
-
-    if (!rv$selection_ready) { rv$selection_ready <- TRUE }
-
-    loc <- rv$selected_grid
-    map %>%
-      removeShape("selected_grid") %>%
-      addRectangles(
-        data = rv$grid_data %>%
-          filter(lat == loc$lat, lng == loc$lng),
-        lat1 = ~lat - .05, lat2 = ~lat + .05,
-        lng1 = ~lng - .05, lng2 = ~lng + .05,
-        group = layers$grid,
-        layerId = "selected",
-        weight = .5, opacity = 1, color = "black",
-        fillOpacity = 0,
-        label = ~shiny::HTML(paste0(label, "<br><i>This location is shown in the charts below.</i>")),
-        options = pathOptions(pane = "selected_grid")
-      )
-  })
-
-
-  ## Draw user location on map ----
-
-  observe({
-    req(input$user_loc)
-
-    loc <- input$user_loc
-    loc_grid <- lapply(loc, function(x) round(x, 1))
-
-    delay(250, {
-      rv$selected_grid <- loc_grid
-      leafletProxy("map") %>%
-        addMarkers(
-          lat = loc$lat, lng = loc$lng,
-          layerId = "user_loc",
-          label = HTML(str_glue("
-          <b>Your location</b><br>
-          Latitude: {loc$lat}<br>
-          Longitude: {loc$lng}<br>
-          <i>Click to remove marker.</i>
-        "))
-        )
-    })
-  })
-
-  observeEvent(input$map_marker_click, {
-    req(input$map_marker_click$id == "user_loc")
-    leafletProxy("map") %>%
-      removeMarker("user_loc")
-  })
-
 
   # PLOTS & DATA ---------------------------------------------------------------
-
 
   ## Set local data ----
 
@@ -687,7 +87,7 @@ server <- function(input, output, session) {
   ## Main UI ----
 
   output$location_ui <- renderUI({
-    validate(need(rv$selection_ready, "Please select a grid cell in the map above to view detailed weather data for that location. Use the crosshair icon on the map to automatically select your location."))
+    validate(need(rv$selected_grid_ready, "Please select a grid cell in the map above to view detailed weather data for that location. Use the crosshair icon on the map to automatically select your location."))
 
     tagList(
       uiOutput("selected_grid_ui"),
@@ -737,7 +137,7 @@ server <- function(input, output, session) {
           inline = T
         )
       ),
-      plotlyOutput("weather_plot"),
+      plotlyOutput("weather_plot", height = "500px"),
       div(class = "plot-caption", HTML("Click on any legend item in the plot to show or hide it. Weather data originally sourced from NOAA and retrieved from <a href='https://agweather.cals.wisc.edu/'>AgWeather</a>."))
     )
   })
@@ -799,7 +199,7 @@ server <- function(input, output, session) {
           inline = T
         )
       ),
-      plotlyOutput("climate_plot"),
+      plotlyOutput("climate_plot", height = "500px"),
       div(class = "plot-caption",
         HTML("Click on any legend item in the plot to show or hide it. Today's date is indicated as a vertical dashed line. Climate data sourced from <a href='https://www.climatologylab.org/gridmet.html'>GridMET</a>.")
       )
@@ -909,7 +309,7 @@ server <- function(input, output, session) {
         )
       ),
       br(),
-      plotlyOutput("custom_plot"),
+      plotlyOutput("custom_plot", height = "500px"),
       div(class = "plot-caption", HTML("Click on any legend item in the plot to show or hide it. Today's date is indicated as a vertical dashed line. Weather data originally sourced from NOAA and retrieved from <a href='https://agweather.cals.wisc.edu'>AgWeather</a>, climate data sourced from <a href='https://www.climatologylab.org/gridmet.html'>GridMET</a>."))
     )
   })
@@ -961,14 +361,10 @@ server <- function(input, output, session) {
           font = list(
             family = "Lato",
             size = 18)),
-        legend = list(
-          title = list(
-            text = "<b>Plot elements</b>",
-            size = 14)),
+        legend = list(orientation = "h"),
         xaxis = list(
           title = "Date",
-          hoverformat = "%b %d, %Y (day %j)",
-          domain = c(0, .95)),
+          hoverformat = "%b %d, %Y (day %j)"),
         hovermode = "x unified",
         shapes = list(
           list(
@@ -994,7 +390,7 @@ server <- function(input, output, session) {
           if (opts$smoothing != 1) paste0(opts$smoothing, "-day")
         ), collapse = ", ")
         if (info != "") info <- paste0("(", info, ")")
-        paste(str, info, "- ")
+        paste0(str, info, ": ")
       }
 
       # if the same trace type on both sides so make 2nd dashed and don't repeat axis
