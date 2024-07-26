@@ -405,39 +405,37 @@ mapServer <- function() {
       # returns a minimal dataset with lat, lng, and value cols
       prepare_weather_grid_data <- function(df, col, dt) {
         if (length(dt) == 1) {
-          df %>%
-            filter(date == dt) %>%
-            rename(c("value" = col)) %>%
-            select(lat, lng, value)
+          df1 <- filter(df, date == dt)
+          df2 <- NULL
         } else {
-          df1 <- df %>%
-            filter(date == dt[1]) %>%
-            rename(c("value1" = col)) %>%
-            select(lat, lng, value1)
-          df2 <- df %>%
-            filter(date == dt[2]) %>%
-            rename(c("value2" = col)) %>%
-            select(lat, lng, value2)
-          left_join(df1, df2, join_by(lat, lng)) %>%
-            mutate(value = value2 - value1) %>%
-            select(lat, lng, value)
+          df1 <- filter(df, date == dt[1])
+          df2 <- filter(df, date == dt[2])
         }
+        prepare_grid_data(df1, df2, col)
       }
 
       prepare_climate_grid_data <- function(df, col, dt) {
         if (length(dt) == 1) {
-          df %>%
-            filter(yday == yday(dt)) %>%
-            rename(c("value" = col)) %>%
+          df1 <- filter(df, yday == yday(dt))
+          df2 <- NULL
+        } else {
+          df1 <- filter(df, yday == yday(dt[1]))
+          df2 <- filter(df, yday == yday(dt[2]))
+        }
+        prepare_grid_data(df1, df2, col)
+      }
+
+      prepare_grid_data <- function(df1, df2, col) {
+        if (is.null(df2)) {
+          df1 %>%
+            rename(all_of(c(value = col))) %>%
             select(lat, lng, value)
         } else {
-          df1 <- df %>%
-            filter(yday == yday(dt[1])) %>%
-            rename(c("value1" = col)) %>%
+          df1 <- df1 %>%
+            rename(all_of(c(value1 = col))) %>%
             select(lat, lng, value1)
-          df2 <- df %>%
-            filter(yday == yday(dt[2])) %>%
-            rename(c("value2" = col)) %>%
+          df2 <- df2 %>%
+            rename(all_of(c(value2 = col))) %>%
             select(lat, lng, value2)
           left_join(df1, df2, join_by(lat, lng)) %>%
             mutate(value = value2 - value1) %>%
@@ -501,8 +499,10 @@ mapServer <- function() {
           mutate(grid_pt = coords_to_pt(lat, lng)) %>%
           set_grid_labels(opts)
 
-        rv$grid_data <- grid
-        rv$grid_opts <- opts
+        {
+          rv$grid_data <- grid
+          rv$grid_opts <- opts
+        } # does this set both at the same tick?
       })
 
       # create the palette domain
