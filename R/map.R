@@ -37,6 +37,8 @@ mapServer <- function() {
 
       # Reactive values ----
 
+      init_time <- Sys.time()
+
       rv <- reactiveValues(
 
         # stores date slider state
@@ -45,13 +47,9 @@ mapServer <- function() {
 
         # dataset for map grid
         grid_data = NULL,
-
-        # palette used for map grid
-        grid_pal = NULL,
-        grid_pal_domain = NULL,
-
-        # false until any grid point is selected
-        selection_ready = FALSE
+        grid_opts = NULL,
+        grid_domain = NULL,
+        grid_pal = NULL
       )
 
 
@@ -61,8 +59,10 @@ mapServer <- function() {
       output$map_opts_ui <- renderUI({
         type <- req(input$map_data_type)
 
-        # leafletProxy("map") %>%
-        #   clearGroup(layers$grid)
+        # clear map state on type change
+        rv$grid_data <- NULL
+        rv$grid_opts <- NULL
+        leafletProxy("map") %>% clearGroup(layers$grid)
 
         tagList(
           if (type == "weather") {
@@ -190,10 +190,10 @@ mapServer <- function() {
         dt <- req(input$date_slider)
 
         if (length(dt) == 2) {
-          rv$date_start = dt[1]
-          rv$date_end = dt[2]
+          rv$date_start <- dt[1]
+          rv$date_end <- dt[2]
         } else {
-          rv$date_end = dt
+          rv$date_end <- dt
           rv$date_start <-
             if (is.null(rv$date_start)) {
               start_of_year(dt)
@@ -245,20 +245,51 @@ mapServer <- function() {
       })
 
 
-      ## legend_lock ----
+      ## display options ----
+      ## legend_autoscale ----
       output$display_opts_ui <- renderUI({
         div(
           tags$label("Display options"),
           div(class = "map-display-opts",
             checkboxInput(
-              inputId = ns("legend_lock"),
-              label = "Lock legend",
-              value = FALSE
-            )
+              inputId = ns("legend_autoscale"),
+              label = "Autoscale map legend",
+              value = coalesce(input$legend_autoscale, TRUE)
+            ),
+            uiOutput(ns("legend_range"))
           )
         )
       })
 
+      ## legend_range ----
+      output$legend_range <- renderUI({
+        opts <- list()
+        if (isTRUE(input$legend_autoscale)) {
+          opts$style <- "display:none;"
+          opts$min <- rv$grid_domain[1]
+          opts$max <- rv$grid_domain[2]
+        } else {
+          opts$style <- "display:inline-flex; gap:10px;"
+          opts$min <- input$legend_min
+          opts$max <- input$legend_max
+        }
+
+        div(
+          style = opts$style,
+          numericInput(
+            inputId = ns("legend_min"),
+            label = "Min value",
+            step = .1,
+            value = opts$min
+          ),
+          numericInput(
+            inputId = ns("legend_max"),
+            label = "Max value",
+            step = .1,
+            value = opts$max
+          )
+        )
+      })
 
 
       # MAP ----
@@ -435,8 +466,8 @@ mapServer <- function() {
         )
       }
 
+      # prepares grid data
       observe({
-        req(!is.null(input$legend_lock))
         opts <- list()
         opts$type <- req(input$map_data_type)
         opts$date <- req(input$date_slider)
@@ -466,66 +497,84 @@ mapServer <- function() {
               mutate(value = wx_value - cl_value)
           }
 
-        # set color palette
-        if (input$legend_lock) {
-          opts$domain <- rv$grid_pal_domain
-          opts$pal <- rv$grid_pal
+        grid <- grid %>%
+          mutate(grid_pt = coords_to_pt(lat, lng)) %>%
+          set_grid_labels(opts)
+
+        rv$grid_data <- grid
+        rv$grid_opts <- opts
+      })
+
+      # create the palette domain
+      create_domain <- function(min_val, max_val) {
+        signif(c(min_val, max_val), 3)
+      }
+
+      # color palette function for displaying grid
+      observe({
+        grid <- req(rv$grid_data)
+        opts <- req(rv$grid_opts)
+        opts$autoscale <- isTRUE(input$legend_autoscale)
+
+        # percent frost/freeze palette
+        if (opts$col %in% OPTS$percent_cols) {
+          opts$domain <- c(0, 1)
+          opts$colors <- "Blues"
+        } else if (opts$type == "comparison" & opts$col %in% OPTS$comparison_cols) {
+          # +/- comparisons vs climate. Centered on zero
+          opts$domain <- create_domain(-max(abs(grid$value)), max(abs(grid$value)))
+          opts$colors <- "Spectral"
         } else {
-          if (opts$col %in% OPTS$percent_cols) {
-            # percent frost/freeze palette
-            opts$domain <- c(0, 1)
-            opts$pal <- colorNumeric("Blues", opts$domain, reverse = T)
-          } else if (opts$type == "comparison" & opts$col %in% OPTS$comparison_cols) {
-            # +/- comparisons vs climate. Centered on zero
-            opts$domain <- c(-max(abs(grid$vals)), max(abs(grid$vals)))
-            opts$pal <- colorNumeric("Spectral", opts$domain, reverse = T)
-          } else {
-            opts$domain <- c(min(grid$value), max(grid$value))
-            opts$pal <- colorNumeric("Spectral", opts$domain, reverse = T)
-          }
-          rv$grid_pal_domain <- opts$domain
-          rv$grid_pal <- opts$pal
+          opts$domain <- create_domain(min(grid$value), max(grid$value))
+          opts$colors <- "Spectral"
         }
 
-        rv$grid_data <- grid %>%
-          mutate(pal_value = mapply(clamp, value, opts$domain[1], opts$domain[2])) %>%
-          mutate(fill = opts$pal(pal_value)) %>%
-          set_grid_labels(opts) %>%
-          mutate(grid_pt = coords_to_pt(lat, lng))
-        })
+        # when autoscale unchecked, use min/max values from input for domain
+        if (!opts$autoscale) {
+          opts$domain <- c(
+            req(input$legend_min),
+            req(input$legend_max)
+          )
+        }
+
+        rv$grid_domain <- opts$domain
+        rv$grid_pal <- colorNumeric(opts$colors, opts$domain, reverse = T)
+        # message("palette refreshed at ", Sys.time() - init_time)
+      })
 
 
       ## Draw grid ----
-      observe({
-        map <- leafletProxy(ns("map"))
-        grid <- rv$grid_data
 
-        if (is.null(grid)) {
-          map %>%
-            clearGroup(layers$grid) %>%
-            removeControl("legend")
-        } else {
-          map %>%
-            addRectangles(
-              data = grid,
-              lat1 = ~lat - .05, lat2 = ~lat + .05,
-              lng1 = ~lng - .05, lng2 = ~lng + .05,
-              group = layers$grid,
-              layerId = ~grid_pt,
-              weight = 0,
-              fillOpacity = .75,
-              fillColor = ~fill,
-              label = ~lapply(label, shiny::HTML),
-              options = pathOptions(pane = "grid")
-            ) %>%
-            addLegend(
-              layerId = "legend",
-              position = "bottomright",
-              pal = rv$grid_pal,
-              bins = 5,
-              values = rv$grid_pal_domain
-            )
-        }
+      observe({
+        opts <- list()
+        opts$grid <- req(rv$grid_data)
+        opts$pal <- req(rv$grid_pal)
+        opts$domain <- req(rv$grid_domain)
+
+        grid <- opts$grid %>%
+          mutate(pal_value = mapply(clamp, value, opts$domain[1], opts$domain[2])) %>%
+          mutate(fill = opts$pal(pal_value))
+
+        leafletProxy(ns("map")) %>%
+          addRectangles(
+            data = grid,
+            lat1 = ~lat - .05, lat2 = ~lat + .05,
+            lng1 = ~lng - .05, lng2 = ~lng + .05,
+            group = layers$grid,
+            layerId = ~grid_pt,
+            weight = 0,
+            fillOpacity = .75,
+            fillColor = ~fill,
+            label = ~lapply(label, shiny::HTML),
+            options = pathOptions(pane = "grid")
+          ) %>%
+          addLegend(
+            layerId = "legend",
+            position = "bottomright",
+            pal = opts$pal,
+            bins = 5,
+            values = opts$domain
+          )
       })
 
 
@@ -547,10 +596,6 @@ mapServer <- function() {
         if (is.null(rv$selected_grid)) {
           map %>% removeShape("selected_grid")
           return()
-        }
-
-        if (!rv$selection_ready) {
-          rv$selection_ready <- TRUE
         }
 
         loc <- rv$selected_grid
