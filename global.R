@@ -16,12 +16,18 @@ suppressMessages({
   library(leaflet) # map
   library(leaflet.extras) # map JS buttons
   library(plotly) # plots
-  library(future)
 })
 
 
 
 # Utility functions ----
+
+lapply2 <- function(x, fun) {
+  setNames(
+    lapply(x, fun),
+    x
+  )
+}
 
 yesterday <- function() Sys.Date() - 1
 
@@ -126,6 +132,7 @@ OPTS <- list(
   min_lng = -93.0,
   max_lng = -86.8,
   start_date = as_date(paste0(cur_yr - 1, "-1-1")),
+  weather_years = c(cur_yr, cur_yr - 1),
   weather_date_fmt = "%b %-d, %Y (day %-j)",
   climate_date_fmt = "%b %-d (day %-j)",
   weather_date_max = NULL, # set in server
@@ -140,6 +147,12 @@ OPTS <- list(
     "Weekly rolling mean" = 7,
     "14-day rolling mean" = 14
   ),
+  plot_line_width = 1.5,
+  cumulative_cols = c("gdd41cum", "gdd50cum"),
+  percent_cols = c("frost", "freeze", "frost_by", "freeze_by"),
+  comparison_cols = c("min_temp", "max_temp", "gdd41", "gdd50"),
+  smoothable_weather = c("min_temp", "max_temp", "mean_temp", "gdd41", "gdd50"),
+  smoothable_climate = c("min_temp", "max_temp", "mean_temp", "gdd41", "gdd50", "frost", "freeze", "frost_by", "freeze_by"),
   grid_cols = list(
     weather = list(
       "Mean daily temp (F)" = "mean_temp",
@@ -181,12 +194,7 @@ OPTS <- list(
     "Climate - GDD/day" = "climate_gdd",
     "Climate - Cumulative GDD" = "climate_gddcum",
     "Climate - Frost/Freeze probability" = "climate_frost"
-  ),
-  cumulative_cols = c("gdd41cum", "gdd50cum"),
-  percent_cols = c("frost", "freeze", "frost_by", "freeze_by"),
-  comparison_cols = c("min_temp", "max_temp", "gdd41", "gdd50"),
-  smoothable_weather = c("min_temp", "max_temp", "mean_temp", "gdd41", "gdd50"),
-  smoothable_climate = c("min_temp", "max_temp", "mean_temp", "gdd41", "gdd50", "frost", "freeze", "frost_by", "freeze_by")
+  )
 )
 
 

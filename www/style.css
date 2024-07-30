@@ -60,3 +60,21 @@ a, a:hover, a:focus {
 .map-display-opts > * > .checkbox {
   margin: 0;
 }
+
+/* remove bottom padding in bscollapse */
+.panel-body {
+  padding-bottom: 0;
+}
+
+/* animate collapse arrow */
+.panel-title > a:before {
+  display: inline-block;
+  margin-right: 5px;
+  content: "▼";
+  transition: 0.25s;
+  transform: rotate(-90deg);
+}
+
+.panel-title > a[aria-expanded=true]:before {
+  transform: rotate(0);
+}

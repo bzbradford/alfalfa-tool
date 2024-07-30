@@ -14,10 +14,26 @@ server <- function(input, output, session) {
     # false if new weather data needs downloading
     weather_ready = length(weather_dates()) == 0,
 
-    selected_grid = NULL,
-    selected_grid_ready = FALSE
-
+    loc = NULL,
+    loc_ready = FALSE
   )
+
+  loc_data <- reactive({
+    loc <- req(rv$loc)
+
+    list(
+      loc = loc,
+      weather = weather %>%
+        filter(lat == loc$lat, lng == loc$lng),
+      c10 = climate$c10 %>%
+        filter(lat == loc$lat, lng == loc$lng) %>%
+        mutate(date = start_of_year() + yday - 1),
+      c5 = climate$c5 %>%
+        filter(lat == loc$lat, lng == loc$lng) %>%
+        mutate(date = start_of_year() + yday - 1)
+    )
+  })
+
 
   # Initialize module servers ----
 
@@ -25,17 +41,19 @@ server <- function(input, output, session) {
   mapServerValues <- mapServer()
 
   observe({
-    rv$selected_grid <- mapServerValues()$selected_grid
+    rv$loc <- mapServerValues()$selected_grid
   })
 
   observe({
-    if (is.null(rv$selected_grid)) return()
-    rv$selected_grid_ready <- TRUE
+    if (is.null(rv$loc)) return()
+    rv$loc_ready <- TRUE
   })
 
 
-  ## plot server ----
-  plotServer(selected_grid = reactive(rv$selected_grid))
+  ## plot servers ----
+  weatherPlotServer(reactive(loc_data()))
+  climatePlotServer(reactive(loc_data()))
+  customPlotServer(reactive(loc_data()))
 
 
   # Main UI ----
@@ -67,10 +85,10 @@ server <- function(input, output, session) {
 
   ## location_ui ----
   output$location_ui <- renderUI({
-    validate(need(rv$selected_grid_ready, "Please select a grid cell in the map above to view detailed weather data for that location. Use the crosshair icon on the map to automatically select your location."))
+    validate(need(rv$loc_ready, "Please select a grid cell in the map above to view detailed weather data for that location. Use the crosshair icon on the map to automatically select your location."))
 
     tagList(
-      uiOutput("selected_grid_ui"),
+      uiOutput("lat_lng_ui"),
       tabsetPanel(
         tabPanel(
           "Weather plot",
@@ -98,9 +116,9 @@ server <- function(input, output, session) {
     )
   })
 
-  ## selected_grid_ui ----
-  output$selected_grid_ui <- renderUI({
-    loc <- req(rv$selected_grid)
+  ## lat_lng_ui ----
+  output$lat_lng_ui <- renderUI({
+    loc <- req(rv$loc)
     p(strong("Selected grid:"), sprintf("%.1f°N, %.1f°W", loc$lat, loc$lng))
   })
 

@@ -93,7 +93,7 @@ mapServer <- function() {
         radioButtons(
           inputId = ns("weather_year"),
           label = "Weather year",
-          choices = list(cur_yr, cur_yr - 1),
+          choices = OPTS$weather_years,
           selected = coalesce(input$weather_year, as.character(cur_yr)),
           inline = T
         )

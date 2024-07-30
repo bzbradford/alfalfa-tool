@@ -16,7 +16,7 @@ set_axis <- function(plt, yaxis, title) {
 
 add_temp_traces <- function(plt, df, yaxis = "y1", label = "", dash = F) {
   dash <- ifelse(dash, "dashdot", "none")
-  width <- 1
+  width <- OPTS$plot_line_width
 
   plt %>%
     add_trace(
@@ -82,7 +82,7 @@ add_temp_traces <- function(plt, df, yaxis = "y1", label = "", dash = F) {
 
 add_gdd_daily_traces <- function(plt, df, yaxis = "y1", label = "", dash = F) {
   dash <- ifelse(dash, "dashdot", "none")
-  width <- 1
+  width <- OPTS$plot_line_width
 
   plt %>%
     add_trace(
@@ -112,7 +112,7 @@ add_gdd_daily_traces <- function(plt, df, yaxis = "y1", label = "", dash = F) {
 
 add_gdd_cum_traces <- function(plt, df, yaxis = "y1", label = "", dash = F) {
   dash <- ifelse(dash, "dashdot", "none")
-  width <- 1
+  width <- OPTS$plot_line_width
 
   plt %>%
     add_trace(
@@ -141,7 +141,7 @@ add_gdd_cum_traces <- function(plt, df, yaxis = "y1", label = "", dash = F) {
 }
 
 add_frost_traces <- function(plt, df, yaxis = "y1") {
-  width <- 1
+  width <- OPTS$plot_line_width
 
   plt %>%
     add_trace(
