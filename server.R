@@ -19,8 +19,9 @@ server <- function(input, output, session) {
 
   )
 
-  # initialize module servers ----
+  # Initialize module servers ----
 
+  ## map server ----
   mapServerValues <- mapServer()
 
   observe({
@@ -28,46 +29,43 @@ server <- function(input, output, session) {
   })
 
   observe({
-    if (!is.null(rv$selected_grid)) {
-      rv$selected_grid_ready <- TRUE
-    }
+    if (is.null(rv$selected_grid)) return()
+    rv$selected_grid_ready <- TRUE
   })
 
+
+  ## plot server ----
   plotServer(selected_grid = reactive(rv$selected_grid))
 
 
-  # MAIN UI --------------------------------------------------------------------
+  # Main UI ----
 
-  # this will appear as a spinning loader until weather data ready
+  ## main_ui ----
   output$main_ui <- renderUI({
-    req(rv$weather_ready)
-
+    if (!rv$weather_ready) {
+      dates <- format(as_date(weather_dates()), "%b %d")
+      msg <- if (length(dates) == 1) {
+        dates
+      } else {
+        paste(c(first(dates), last(dates)), collapse = " - ")
+      }
+      msg <- paste0("Please wait, downloading weather data for ", msg, ".")
+      showModal(modalDialog(msg, fade = F, footer = NULL))
+      fill_weather()
+      gc()
+      rv$weather_ready <- TRUE
+      removeModal()
+    }
     tagList(
       mapUI(),
       div(
-        h3(
-          style = "margin-top: 1em;",
-          "Weather and climate details"
-        ),
+        h3(style = "margin-top: 1em;", "Weather and climate details"),
         uiOutput("location_ui")
       )
     )
   })
 
-  # download fresh weather data if not up to date
-  observe({
-    if (!rv$weather_ready) {
-      fill_weather()
-      rv$weather_ready <- TRUE
-    }
-  })
-
-
-
-  # PLOTS & DATA ---------------------------------------------------------------
-
-  ## Main UI ----
-
+  ## location_ui ----
   output$location_ui <- renderUI({
     validate(need(rv$selected_grid_ready, "Please select a grid cell in the map above to view detailed weather data for that location. Use the crosshair icon on the map to automatically select your location."))
 
@@ -100,11 +98,10 @@ server <- function(input, output, session) {
     )
   })
 
+  ## selected_grid_ui ----
   output$selected_grid_ui <- renderUI({
     loc <- req(rv$selected_grid)
     p(strong("Selected grid:"), sprintf("%.1f°N, %.1f°W", loc$lat, loc$lng))
   })
-
-
 
 }

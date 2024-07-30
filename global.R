@@ -16,6 +16,7 @@ suppressMessages({
   library(leaflet) # map
   library(leaflet.extras) # map JS buttons
   library(plotly) # plots
+  library(future)
 })
 
 
@@ -53,6 +54,66 @@ align_dates <- function(target_date, ref_date) {
 clamp <- function(x, left, right) {
   if (is.null(x)) return()
   min(max(left, x), right)
+}
+
+calc_gdd <- function(tmin, tmax, base, upper) {
+  mapply(gdd_sine, tmin, tmax, base, upper)
+}
+
+gdd_sine <- function(tmin, tmax, base, upper) {
+  if (is.na(tmin) || is.na(tmax)) return(NA)
+
+  # swap min and max if in wrong order for some reason
+  if (tmin > tmax) {
+    t = tmin
+    tmin = tmax
+    tmax = t
+  }
+
+  # min and max > upper
+  if (tmin >= upper) return(upper - base)
+
+  # min and max < lower
+  if (tmax <= base) return(0)
+
+  average = (tmin + tmax) / 2
+
+  # min and max between base and upper
+  if (tmax <= upper && tmin >= base) return(average - base)
+
+  alpha = (tmax - tmin) / 2
+
+  # min < base, max between base and upper
+  if (tmax <= upper && tmin < base) {
+    base_radians = asin((base - average) / alpha)
+    a = average - base
+    b = pi / 2 - base_radians
+    c = alpha * cos(base_radians)
+    return((1 / pi) * (a * b + c))
+  }
+
+  # max > upper and min between base and upper
+  if (tmax > upper && tmin >= base) {
+    upper_radians = asin((upper - average) / alpha)
+    a = average - base
+    b = upper_radians + pi / 2
+    c = upper - base
+    d = pi / 2 - upper_radians
+    e = alpha * cos(upper_radians)
+    return((1 / pi) * (a * b + c * d - e))
+  }
+
+  # max > upper and min < base
+  if (tmax > upper && tmin < base) {
+    base_radians = asin((base - average) / alpha)
+    upper_radians = asin((upper - average) / alpha)
+    a = average - base
+    b = upper_radians - base_radians
+    c = alpha * (cos(base_radians) - cos(upper_radians))
+    d = upper - base
+    e = pi / 2 - upper_radians
+    return((1 / pi) * ((a * b + c) + (d * e)))
+  }
 }
 
 
@@ -172,6 +233,11 @@ add_climate_cols <- function(.data) {
     )
 }
 
+remove_weather_cols <- function(.data) {
+  drop_cols <- c("year", "yday", "mean_temp", "frost", "freeze", "gdd41cum", "gdd50cum")
+  .data %>% select(-all_of(drop_cols))
+}
+
 add_weather_cols <- function(.data) {
   .data %>%
     arrange(lat, lng, date) %>%
@@ -239,7 +305,9 @@ fill_weather <- function(dates = weather_dates()) {
   }
 
   # save minimal dataset
-  weather %>% write_rds("data/weather.rds", "gz")
+  weather %>%
+    remove_weather_cols() %>%
+    write_feather("data/weather.feather")
 
   # build additional cols
   weather <<- weather %>% add_weather_cols()
@@ -254,12 +322,11 @@ if (!exists("climate")) {
   climate <- read_rds("data/climate.rds") %>% lapply(add_climate_cols)
 }
 
-if (!exists("weather") & file.exists("data/weather.rds")) {
-  weather <- read_rds("data/weather.rds") %>% add_weather_cols()
-} else if (max(weather$date) != yesterday()) {
-  weather <- read_rds("data/weather.rds") %>% add_weather_cols()
+if (file.exists("data/weather.feather")) {
+  if (!exists("weather") || max(weather$date) != yesterday())
+  weather <- read_feather("data/weather.feather") %>% add_weather_cols()
 }
 
 # delete some weather for testing
-# weather <- weather %>% filter(date < "2024-07-15")
+# weather <- weather %>% filter(date < Sys.Date() - 3)
 # weather %>% write_feather("data/weather.feather")
