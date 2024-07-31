@@ -27,24 +27,6 @@ customPlotServer <- function(plot_data) {
         rv$c5 <- plot_data()$c5
       })
 
-      # observe({
-      #   rv$y1 <- list(
-      #     elems = input$y1_elems,
-      #     year = input$y1_year,
-      #     period = input$y1_period,
-      #     smoothing = input$y1_smoothing
-      #   )
-      #   rv$y2 <- list(
-      #     elems = input$y2_elems,
-      #     year = input$y2_year,
-      #     period = input$y2_period,
-      #     smoothing = input$y2_smoothing
-      #   )
-      # })
-
-      # observe(print(rv$y1))
-      # observe(print(rv$y2))
-
       output$options_ui <- renderUI({
         bsCollapse(
           bsCollapsePanel(
@@ -245,16 +227,8 @@ customPlotServer <- function(plot_data) {
         # base plot
         plt <- plot_ly() %>%
           layout(
-            legend = list(
-              orientation = "h",
-              xanchor = "center",
-              x = .5, y = -.15),
-            xaxis = list(
-              title = "Date",
-              dtick = "M1",
-              tickformat = "%b",
-              hoverformat = "%b %d (day %j)",
-              domain = c(0, .95)),
+            legend = OPTS$plot_legend,
+            xaxis = OPTS$plot_date_axis_climate,
             hovermode = "x unified"
           )
 
@@ -278,20 +252,13 @@ customPlotServer <- function(plot_data) {
           df <- if (opts$data == "weather") {
             df <- rv$weather %>%
               filter(year == opts$year) %>%
-              mutate(across(
-                all_of(OPTS$smoothable_weather),
-                ~zoo::rollapply(.x, width = opts$smoothing, FUN = mean, na.rm = T, partial = T)
-              ))
+              smooth_weather(opts$smoothing)
             if (opts$year != cur_yr) {
               df <- df %>% mutate(date = start_of_year() + yday - 1)
             }
             df
           } else {
-            rv[[opts$period]] %>%
-              mutate(across(
-                all_of(OPTS$smoothable_climate),
-                ~zoo::rollapply(.x, width = opts$smoothing, FUN = mean, na.rm = T, partial = T)
-              ))
+            rv[[opts$period]] %>% smooth_climate(opts$smoothing)
           }
 
           # add traces
@@ -310,17 +277,8 @@ customPlotServer <- function(plot_data) {
         }
 
         plt %>% layout(
-          shapes = list(
-            list(
-              type = "line",
-              x0 = Sys.Date(), x1 = Sys.Date(),
-              y0 = 0, y1 = 1, yref = "paper",
-              line = list(color = "black", dash = "dot"),
-              opacity = .5
-            )
-          )
+          shapes = list(vline())
         )
-
       })
 
     } # end module

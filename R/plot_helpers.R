@@ -1,5 +1,53 @@
 #- plot_helpers.R -#
 
+# plotly horizontal line annotation
+hline <- function(y = 0, color = "black", dash = "dash", alpha = .5) {
+  list(
+    type = "line", xref = "paper",
+    x0 = 0, x1 = 1, y0 = y, y1 = y,
+    line = list(color = color, dash = dash),
+    opacity = alpha
+  )
+}
+
+# plotly rectanglular annotation
+rect <- function(ymin, ymax, color = "red") {
+  list(
+    type = "rect",
+    fillcolor = color,
+    line = list(color = color),
+    opacity = 0.1,
+    xref = "x domain",
+    x0 = 0, x1 = 1,
+    y0 = ymin, y1 = ymax,
+    layer = "below"
+  )
+}
+
+add_today <- function(plt, other_shapes = list()) {
+  x <- yesterday()
+
+  vline <- list(list(
+    type = "line", yref = "y domain",
+    x0 = x, x1 = x, y0 = 0, y1 = .95,
+    line = list(color = "black", dash = "dash"),
+    opacity = .25
+  ))
+
+  text <- list(list(
+    yref = "y domain",
+    x = x, y = 1,
+    text = "Today",
+    showarrow = F,
+    opacity = .5
+  ))
+
+  shapes <- c(other_shapes, vline)
+
+  plt %>%
+    layout(shapes = shapes, annotations = text)
+}
+
 set_axis <- function(plt, yaxis, title) {
   axis <-  list(
     title = title,

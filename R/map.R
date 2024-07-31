@@ -3,28 +3,15 @@
 mapUI <- function() {
   ns <- NS("map")
 
-  tagList(
-    h3(style = "margin-top: 1em;", "Gridded weather and climate data"),
-    fluidRow(
-      column(8,
-        leafletOutput(ns("map"), width = "100%", height = "720px")
-      ),
-      column(4,
-        div(
-          class = "well", style = "margin-bottom: 0;",
-          radioButtons(
-            inputId = ns("map_data_type"),
-            label = "Choose data layer",
-            choices = list(
-              "Current weather" = "weather",
-              "Climate normals" = "climate",
-              "Weather vs climate" = "comparison"
-            )
-          ),
-          uiOutput(ns("map_opts_ui"))
-        )
-      )
-    )
+  leafletOutput(ns("map"), width = "100%", height = "750px")
+}
+
+mapSidebarUI <- function() {
+  ns <- NS("map")
+
+  div(
+    class = "well", style = "margin-bottom: 0px;",
+    uiOutput(ns("map_opts_ui"))
   )
 }
 
@@ -37,7 +24,7 @@ mapServer <- function() {
 
       # Reactive values ----
 
-      init_time <- Sys.time()
+      # init_time <- Sys.time()
 
       rv <- reactiveValues(
 
@@ -55,52 +42,63 @@ mapServer <- function() {
 
       # SIDEBAR ----
 
-      ## map_opts_ui ----
-      output$map_opts_ui <- renderUI({
-        type <- req(input$map_data_type)
-
-        # clear map state on type change
+      # clear map state on type change
+      observeEvent(input$data_type, {
         rv$grid_data <- NULL
         rv$grid_opts <- NULL
         leafletProxy("map") %>% clearGroup(layers$grid)
+      })
 
-        tagList(
-          if (type == "weather") {
-            list(
-              uiOutput(ns("weather_year_ui")),
-              uiOutput(ns("weather_value_ui"))
-            )
-          } else if (type == "climate") {
-            list(
-              uiOutput(ns("climate_period_ui")),
-              uiOutput(ns("climate_value_ui"))
-            )
-          } else {
-            list(
-              uiOutput(ns("weather_year_ui")),
-              uiOutput(ns("climate_period_ui")),
-              uiOutput(ns("comparison_value_ui"))
-            )
-          },
-          uiOutput(ns("date_slider_ui")),
-          uiOutput(ns("date_btns_ui")),
+      output$map_opts_ui <- renderUI({
+        div(
+          style = "display: inline-flex; flex-wrap: wrap; column-gap: 30px;",
+          div(
+            radioButtons(
+              inputId = ns("data_type"),
+              label = "Choose data layer",
+              choices = list(
+                "Current weather" = "weather",
+                "Climate normals" = "climate",
+                "Weather vs climate" = "comparison"
+              ),
+            ),
+          ),
+          div(
+            uiOutput(ns("weather_year_ui")),
+            uiOutput(ns("climate_period_ui")),
+          ),
+          div(
+            uiOutput(ns("weather_value_ui")),
+            uiOutput(ns("climate_value_ui")),
+            uiOutput(ns("comparison_value_ui")),
+          ),
+          div(
+            style = "min-width: 100%;",
+            uiOutput(ns("date_slider_ui")),
+            uiOutput(ns("date_btns_ui")),
+          ),
           uiOutput(ns("display_opts_ui"))
         )
       })
 
       ## weather_year ----
       output$weather_year_ui <- renderUI({
+        type <- req(input$data_type)
+        req(type %in% c("weather", "comparison"))
+
         radioButtons(
           inputId = ns("weather_year"),
           label = "Weather year",
           choices = OPTS$weather_years,
-          selected = coalesce(input$weather_year, as.character(cur_yr)),
-          inline = T
+          selected = coalesce(input$weather_year, as.character(cur_yr))
         )
       })
 
       ## climate_period ----
       output$climate_period_ui <- renderUI({
+        type <- req(input$data_type)
+        req(type %in% c("climate", "comparison"))
+
         opts <- OPTS$climate_period_choices
         radioButtons(
           inputId = ns("climate_period"),
@@ -112,6 +110,9 @@ mapServer <- function() {
 
       ## weather_value ----
       output$weather_value_ui <- renderUI({
+        type <- req(input$data_type)
+        req(type == "weather")
+
         opts <- OPTS$grid_cols$weather
         radioButtons(
           inputId = ns("weather_value"),
@@ -123,6 +124,9 @@ mapServer <- function() {
 
       ## climate_value ----
       output$climate_value_ui <- renderUI({
+        type <- req(input$data_type)
+        req(type == "climate")
+
         opts <- OPTS$grid_cols$climate
         radioButtons(
           inputId = ns("climate_value"),
@@ -134,6 +138,9 @@ mapServer <- function() {
 
       ## comparison_value ----
       output$comparison_value_ui <- renderUI({
+        type <- req(input$data_type)
+        req(type == "comparison")
+
         opts <- OPTS$grid_cols$comparison
         radioButtons(
           inputId = ns("comparison_value"),
@@ -145,7 +152,7 @@ mapServer <- function() {
 
       ## date_slider ----
       output$date_slider_ui <- renderUI({
-        i <- list(type = req(input$map_data_type))
+        i <- list(type = req(input$data_type))
         opts <- list()
 
         if (i$type == "weather") {
@@ -166,7 +173,10 @@ mapServer <- function() {
 
         opts$min = start_of_year(i$year)
         opts$max = min(yesterday(), end_of_year(i$year))
-        opts$value = align_dates(coalesce(rv$date_end, yesterday()), i$year)
+        opts$value = min(
+          align_dates(coalesce(rv$date_end, yesterday()), i$year),
+          opts$max
+        )
         if (i$value %in% OPTS$cumulative_cols) {
           opts$value = c(
             align_dates(coalesce(rv$date_start, opts$min), i$year),
@@ -254,7 +264,7 @@ mapServer <- function() {
             checkboxInput(
               inputId = ns("legend_autoscale"),
               label = "Autoscale map legend",
-              value = coalesce(input$legend_autoscale, TRUE)
+              value = TRUE
             ),
             uiOutput(ns("legend_range"))
           )
@@ -278,15 +288,17 @@ mapServer <- function() {
           style = opts$style,
           numericInput(
             inputId = ns("legend_min"),
-            label = "Min value",
+            label = "Gradient minimum",
             step = .1,
-            value = opts$min
+            value = opts$min,
+            width = "150px"
           ),
           numericInput(
             inputId = ns("legend_max"),
-            label = "Max value",
+            label = "Gradient maximum",
             step = .1,
-            value = opts$max
+            value = opts$max,
+            width = "150px"
           )
         )
       })
@@ -389,7 +401,7 @@ mapServer <- function() {
 
       observeEvent(TRUE, {
         delay(3000, {
-          leafletProxy("map") %>%
+          leafletProxy(ns("map")) %>%
             addLayersControl(
               baseGroups = basemaps$label,
               overlayGroups = unlist(layers, use.names = FALSE),
@@ -467,7 +479,7 @@ mapServer <- function() {
       # prepares grid data
       observe({
         opts <- list()
-        opts$type <- req(input$map_data_type)
+        opts$type <- req(input$data_type)
         opts$date <- req(input$date_slider)
 
         # set grid data
@@ -499,10 +511,9 @@ mapServer <- function() {
           mutate(grid_pt = coords_to_pt(lat, lng)) %>%
           set_grid_labels(opts)
 
-        {
-          rv$grid_data <- grid
-          rv$grid_opts <- opts
-        } # does this set both at the same tick?
+        rv$grid_data <- grid
+        rv$grid_opts <- opts
+        rv$grid_pal <- NULL
       })
 
       # create the palette domain

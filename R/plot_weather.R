@@ -52,8 +52,7 @@ weatherPlotServer <- function(plot_data) {
                 inline = T
               )
             )
-          ),
-          open = "Plot options"
+          )
         )
       })
 
@@ -66,7 +65,7 @@ weatherPlotServer <- function(plot_data) {
           7 ~ "7-day average weather data",
           14 ~ "14-day average air temperature data"
         ) %>%
-          sprintf("%s for %.1f°N, %.1f°W", ., loc$lat, loc$lng)
+          paste(sprintf("for %.1f°N, %.1f°W", loc$lat, loc$lng))
         h4(title, style = "text-align: center;")
       })
 
@@ -74,30 +73,21 @@ weatherPlotServer <- function(plot_data) {
         opts <- list()
         opts$loc <- req(rv$loc)
         opts$year <- req(input$year)
-        opts$smoothing <- req(input$smoothing)
+        opts$smoothing <- as.numeric(req(input$smoothing))
         opts$gdd_type <- req(input$gdd_type)
 
         df <- rv$weather
         if (opts$year != "All") df <- filter(df, year == opts$year)
-        df <- df %>%
-          mutate(across(
-            all_of(OPTS$smoothable_weather),
-            ~zoo::rollapply(.x, width = as.numeric(opts$smoothing), FUN = mean, na.rm = T, partial = T)
-          ))
+        df <- df %>% smooth_weather(opts$smoothing)
 
         plt <- plot_ly() %>%
           layout(
-            legend = list(
-              orientation = "h",
-              xanchor = "center",
-              x = .5, y = -.15),
-            xaxis = list(
-              title = "Date",
-              hoverformat = "%b %d, %Y (day %j)",
-              domain = c(0, .95)),
+            legend = OPTS$plot_legend,
+            xaxis = OPTS$plot_date_axis_weather,
             hovermode = "x unified"
           ) %>%
           add_temp_traces(df, "y1")
+
         plt <- if (opts$gdd_type == "Cumulative") {
           add_gdd_cum_traces(plt, df, "y2")
         } else {

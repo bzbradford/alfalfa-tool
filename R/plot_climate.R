@@ -1,15 +1,7 @@
 
 climatePlotUI <- function() {
   ns <- NS("climate_plot")
-
-  tagList(
-    uiOutput(ns("options_ui")),
-    div(
-      uiOutput(ns("plot_title")),
-      plotlyOutput(ns("plot"), height = "600px"),
-      div(class = "plot-caption", HTML("Click on any legend item in the plot to show or hide it. Today's date is indicated as a vertical dashed line. Climate data sourced from <a href='https://www.climatologylab.org/gridmet.html'>GridMET</a>."))
-    )
-  )
+  uiOutput(ns("main_ui"))
 }
 
 climatePlotServer <- function(plot_data) {
@@ -24,6 +16,19 @@ climatePlotServer <- function(plot_data) {
         rv$loc <- plot_data()$loc
         rv$c10 <- plot_data()$c10
         rv$c5 <- plot_data()$c5
+      })
+
+      output$main_ui <- renderUI({
+        validate(need(rv$loc, OPTS$location_validation_msg))
+
+        tagList(
+          uiOutput(ns("options_ui")),
+          div(
+            uiOutput(ns("plot_title")),
+            plotlyOutput(ns("plot"), height = "600px"),
+            div(class = "plot-caption", HTML("Click on any legend item in the plot to show or hide it. Today's date is indicated as a vertical dashed line. Climate data sourced from <a href='https://www.climatologylab.org/gridmet.html'>GridMET</a>."))
+          )
+        )
       })
 
       output$options_ui <- renderUI({
@@ -46,8 +51,7 @@ climatePlotServer <- function(plot_data) {
                 inline = TRUE
               )
             )
-          ),
-          open = "Plot options"
+          )
         )
       })
 
@@ -64,7 +68,8 @@ climatePlotServer <- function(plot_data) {
           period,
           "c10" ~ "10-year climate data (2013-2023)",
           "c5" ~ "5-year climate data (2018-2023)"
-        ))
+        )) %>%
+          paste(sprintf("for %.1f°N, %.1f°W", loc$lat, loc$lng))
         h4(title, style = "text-align: center;")
       })
 
@@ -75,34 +80,16 @@ climatePlotServer <- function(plot_data) {
         opts$smoothing <- req(input$smoothing) %>% as.numeric()
 
         df <- rv[[opts$period]] %>%
-          mutate(across(
-            all_of(OPTS$smoothable_climate),
-            ~zoo::rollapply(.x, width = opts$smoothing, FUN = mean, na.rm = T, partial = T))) %>%
+          smooth_climate(opts$smoothing) %>%
           mutate(date = start_of_year() + yday - 1)
 
         plot_ly() %>%
           layout(
-            legend = list(
-              orientation = "h",
-              xanchor = "center",
-              x = .5, y = -.15),
-            xaxis = list(
-              title = "Date",
-              dtick = "M1",
-              tickformat = "%b",
-              hoverformat = "%b %d (day %j)",
-              domain = c(0, .95)),
-            hovermode = "x unified",
-            shapes = list(
-              list(
-                type = "line",
-                x0 = Sys.Date(), x1 = Sys.Date(),
-                y0 = 0, y1 = 1, yref = "paper",
-                line = list(color = "black", dash = "dot"),
-                opacity = .5
-              )
-            )
+            legend = OPTS$plot_legend,
+            xaxis = OPTS$plot_date_axis_climate,
+            hovermode = "x unified"
           ) %>%
+          add_today() %>%
           add_temp_traces(df, "y1") %>%
           add_frost_traces(df, "y2")
       })

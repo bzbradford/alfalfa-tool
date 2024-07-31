@@ -127,27 +127,59 @@ gdd_sine <- function(tmin, tmax, base, upper) {
 
 cur_yr <- year(yesterday())
 OPTS <- list(
+  # map extents
   min_lat = 42.4,
   max_lat = 47.1,
   min_lng = -93.0,
   max_lng = -86.8,
+
+  # date settings
   start_date = as_date(paste0(cur_yr - 1, "-1-1")),
+
+  # interface settings
   weather_years = c(cur_yr, cur_yr - 1),
-  weather_date_fmt = "%b %-d, %Y (day %-j)",
-  climate_date_fmt = "%b %-d (day %-j)",
+  weather_date_fmt = "%b %-d, %Y",
+  climate_date_fmt = "%b %-d",
   weather_date_max = NULL, # set in server
   climate_date_min = NULL, # set in server
   climate_date_max = NULL, # set in server
   climate_period_choices = list(
     "10-year climate average (2013-2023)" = "c10",
-    "5-year climate average (2018-2023)" = "c5"
-  ),
+    "5-year climate average (2018-2023)" = "c5"),
   data_smoothing_choices = list(
     "Daily values (no smoothing)" = 1,
     "Weekly rolling mean" = 7,
-    "14-day rolling mean" = 14
-  ),
+    "14-day rolling mean" = 14),
+  custom_plot_elems = list(
+    "Weather - Temperature" = "weather_temp",
+    "Weather - GDD/day" = "weather_gdd",
+    "Weather - Cumulative GDD" = "weather_gddcum",
+    "Climate - Temperature" = "climate_temp",
+    "Climate - GDD/day" = "climate_gdd",
+    "Climate - Cumulative GDD" = "climate_gddcum",
+    "Climate - Frost/Freeze probability" = "climate_frost"),
+
+  # boilerplate
+  location_validation_msg = "Please select a grid cell in the map above to view detailed weather data for that location. Use the crosshair icon on the map to automatically select your location.",
+
+  # plotly settings
+  plot_date_axis_climate = list(
+    title = "Date",
+    dtick = "M1", tickformat = "%b",
+    hoverformat = "%b %d (day %j)",
+    domain = c(0, .95)),
+  plot_date_axis_weather = list(
+    title = "Date",
+    dtick = "M1", tickformat = "%b",
+    hoverformat = "%b %d, %Y (day %j)",
+    domain = c(0, .95)),
+  plot_legend = list(
+    orientation = "h",
+    xanchor = "center",
+    x = .5, y = -.15),
   plot_line_width = 1.5,
+
+  # column defs
   cumulative_cols = c("gdd41cum", "gdd50cum"),
   percent_cols = c("frost", "freeze", "frost_by", "freeze_by"),
   comparison_cols = c("min_temp", "max_temp", "gdd41", "gdd50"),
@@ -161,8 +193,7 @@ OPTS <- list(
       "Daily GDD41 accumulation" = "gdd41",
       "Daily GDD50 accumulation" = "gdd50",
       "Cumulative GDD41" = "gdd41cum",
-      "Cumulative GDD50" = "gdd50cum"
-    ),
+      "Cumulative GDD50" = "gdd50cum"),
     climate = list(
       "Mean daily temp (F)" = "mean_temp",
       "Min daily temp (F)" = "min_temp",
@@ -174,8 +205,7 @@ OPTS <- list(
       "Mean probability of frost on day" = "frost",
       "Mean probability of hard freeze on day" = "freeze",
       "Cumulative probability of frost" = "frost_by",
-      "Cumulative probability of hard freeze" = "freeze_by"
-    ),
+      "Cumulative probability of hard freeze" = "freeze_by"),
     comparison = list(
       "Mean daily temp vs climate average (F)" = "mean_temp",
       "Min daily temp vs climate average (F)" = "min_temp",
@@ -183,18 +213,7 @@ OPTS <- list(
       "Daily GDD41 vs climate average" = "gdd41",
       "Daily GDD50 vs climate average" = "gdd50",
       "Cumul. GDD41 vs climate average" = "gdd41cum",
-      "Cumul. GDD50 vs climate average" = "gdd50cum"
-    )
-  ),
-  custom_plot_elems = list(
-    "Weather - Temperature" = "weather_temp",
-    "Weather - GDD/day" = "weather_gdd",
-    "Weather - Cumulative GDD" = "weather_gddcum",
-    "Climate - Temperature" = "climate_temp",
-    "Climate - GDD/day" = "climate_gdd",
-    "Climate - Cumulative GDD" = "climate_gddcum",
-    "Climate - Frost/Freeze probability" = "climate_frost"
-  )
+      "Cumul. GDD50 vs climate average" = "gdd50cum"))
 )
 
 
@@ -239,6 +258,21 @@ add_climate_cols <- function(.data) {
       .by = c(lat, lng),
       .after = gdd50
     )
+}
+
+smooth_weather <- function(.data, width) {
+  smooth_cols(.data, OPTS$smoothable_weather, width)
+}
+smooth_climate <- function(.data, width) {
+  smooth_cols(.data, OPTS$smoothable_climate, width)
+}
+smooth_cols <- function(.data, cols, width) {
+  stopifnot(is.character(cols), is.numeric(width))
+  if (width == 1) return(.data)
+  mutate(.data, across(
+    all_of(cols),
+    ~zoo::rollapply(.x, width = width, FUN = mean, na.rm = T, partial = T)
+  ))
 }
 
 remove_weather_cols <- function(.data) {
@@ -323,6 +357,8 @@ fill_weather <- function(dates = weather_dates()) {
 
 
 # Initialize data ----
+
+list.files("R", "*.R", full.names = T) %>% sapply(source)
 
 counties <- read_rds("data/counties.rds")
 
