@@ -58,14 +58,14 @@ ui <- navbarPage(
       # tags$script(src = "saveAs.js")
     ),
     div(
-      style = "min-height: 750px;",
+      style = "min-height: 750px; margin: 0 20px;",
       uiOutput("main_ui") %>% withSpinnerProxy()
     )
   ),
-  tabPanel("Weather Map"),
-  tabPanel("Weather Charts"),
-  tabPanel("Timing Tool"),
-  tabPanel("About"),
+  tabPanel("Weather Map", icon = icon("map")),
+  tabPanel("Weather Charts", icon = icon("chart-line")),
+  tabPanel("Timing Tool", icon = icon("tractor")),
+  tabPanel("About", icon = icon("question")),
   footer = tags$footer(
     id = "footer-content",
     br(),

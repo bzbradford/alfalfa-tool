@@ -22,14 +22,10 @@ suppressMessages({
 
 # Utility functions ----
 
-lapply2 <- function(x, fun) {
-  setNames(
-    lapply(x, fun),
-    x
-  )
+# for agweather
+yesterday <- function() {
+  as.Date(format(Sys.time() - 60 * 60, tz = "America/Chicago")) - 1
 }
-
-yesterday <- function() Sys.Date() - 1
 
 make_date <- function(y, m, d) {
   as_date(paste(y, m, d, sep = "-"))
@@ -143,11 +139,14 @@ OPTS <- list(
   weather_date_max = NULL, # set in server
   climate_date_min = NULL, # set in server
   climate_date_max = NULL, # set in server
+  max_cut_dates = 5,
+  cut_freq_choices = seq(800, 1200, by = 100),
+  cut_freq_default = 1000,
   climate_period_choices = list(
     "10-year climate average (2013-2023)" = "c10",
     "5-year climate average (2018-2023)" = "c5"),
   data_smoothing_choices = list(
-    "Daily values (no smoothing)" = 1,
+    "Daily values (none)" = 1,
     "Weekly rolling mean" = 7,
     "14-day rolling mean" = 14),
   custom_plot_elems = list(
@@ -320,7 +319,7 @@ get_weather_grid <- function(d = yesterday()) {
         gdd50 = calc_gdd(min_temp, max_temp, 50, 86)
       )
   } else {
-    message(str_glue("Failed to retrieve weather data for {date}"))
+    message(str_glue("Failed to retrieve weather data for {d}"))
     tibble()
   }
 }

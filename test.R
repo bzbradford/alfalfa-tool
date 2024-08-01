@@ -273,3 +273,8 @@ df %>%
   )
 
 
+# find gdd closest to 500
+
+df[which.min(abs(1000 - df$gdd41cum)),]
+
+
