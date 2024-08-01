@@ -47,8 +47,8 @@ weatherPlotServer <- function(plot_data) {
               ),
               radioButtons(
                 inputId = ns("gdd_type"),
-                label = "Include GDD",
-                choices = c("Cumulative", "Daily"),
+                label = "Show growing degree days",
+                choices = c("None", "Cumulative", "Daily"),
                 inline = T
               )
             )
@@ -88,11 +88,16 @@ weatherPlotServer <- function(plot_data) {
           ) %>%
           add_temp_traces(df, "y1")
 
-        plt <- if (opts$gdd_type == "Cumulative") {
-          add_gdd_cum_traces(plt, df, "y2")
-        } else {
-          add_gdd_daily_traces(plt, df, "y2")
+        if (opts$gdd_type == "Cumulative") {
+          plt <- add_gdd_cum_traces(plt, df, "y2")
+        } else if (opts$gdd_type == "Daily") {
+          plt <- add_gdd_daily_traces(plt, df, "y2")
         }
+
+        if (opts$year != cur_yr - 1) {
+          plt <- plt %>% add_today()
+        }
+
         plt
       })
 

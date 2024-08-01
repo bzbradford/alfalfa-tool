@@ -146,7 +146,7 @@ OPTS <- list(
     "10-year climate average (2013-2023)" = "c10",
     "5-year climate average (2018-2023)" = "c5"),
   data_smoothing_choices = list(
-    "Daily values (none)" = 1,
+    "Daily values (no smoothing)" = 1,
     "Weekly rolling mean" = 7,
     "14-day rolling mean" = 14),
   custom_plot_elems = list(

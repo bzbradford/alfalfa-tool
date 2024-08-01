@@ -65,6 +65,7 @@ set_axis <- function(plt, yaxis, title) {
   } else {
     axis$overlaying = "y"
     axis$side = "right"
+    axis$showgrid = F
     plt %>% layout(yaxis2 = axis)
   }
 }

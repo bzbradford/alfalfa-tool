@@ -266,7 +266,6 @@ timingServer <- function(loc_data) {
             name = "Days since last cutting",
             x = ~date, y = ~days_since_cut,
             type = "scatter", mode = "none",
-            # line = list(color = NULL, opacity = 0),
             hovertemplate = "%{y:.0f}",
             showlegend = F
           ) %>%
@@ -320,7 +319,8 @@ timingServer <- function(loc_data) {
               title = "Cumulative hard freeze probability",
               overlaying = "y",
               side = "right",
-              zeroline = F
+              zeroline = F,
+              showgrid = F
             ),
             hovermode = "x unified"
           )
