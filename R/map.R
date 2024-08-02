@@ -3,16 +3,19 @@
 mapUI <- function() {
   ns <- NS("map")
 
-  leafletOutput(ns("map"), width = "100%", height = "750px")
+  div(
+    div(
+      style = "margin-bottom: 10px;",
+      div(class = "map-title", textOutput(ns("map_title"))),
+      leafletOutput(ns("map"), width = "100%", height = "750px")
+    ),
+    uiOutput(ns("lat_lng_ui"))
+  )
 }
 
 mapSidebarUI <- function() {
   ns <- NS("map")
-
-  div(
-    class = "well", style = "margin-bottom: 0px;",
-    uiOutput(ns("map_opts_ui"))
-  )
+  uiOutput(ns("map_opts_ui"))
 }
 
 mapServer <- function() {
@@ -24,9 +27,8 @@ mapServer <- function() {
 
       # Reactive values ----
 
-      # init_time <- Sys.time()
-
       rv <- reactiveValues(
+        selected_grid = NULL,
 
         # stores date slider state
         date_start = NULL,
@@ -36,52 +38,61 @@ mapServer <- function() {
         grid_data = NULL,
         grid_opts = NULL,
         grid_domain = NULL,
-        grid_pal = NULL
+        grid_pal = NULL,
+
+        map_title = "TEST"
       )
 
 
-      # SIDEBAR ----
+      # SIDEBAR ----------------------------------------------------------------
 
       # clear map state on type change
       observeEvent(input$data_type, {
+        req(input$data_type)
         rv$grid_data <- NULL
         rv$grid_opts <- NULL
         leafletProxy("map") %>% clearGroup(layers$grid)
       })
 
+
+      ## Options UI ----
+
       output$map_opts_ui <- renderUI({
         div(
-          style = "display: inline-flex; flex-wrap: wrap; column-gap: 30px;",
+          class = "well",
           div(
-            radioButtons(
-              inputId = ns("data_type"),
-              label = "Choose data layer",
-              choices = list(
-                "Current weather" = "weather",
-                "Climate normals" = "climate",
-                "Weather vs climate" = "comparison"
+            style = "display: inline-flex; flex-wrap: wrap; column-gap: 30px;",
+            div(
+              radioButtons(
+                inputId = ns("data_type"),
+                label = "Choose data layer",
+                choices = list(
+                  "Current weather" = "weather",
+                  "Climate normals" = "climate",
+                  "Weather vs climate" = "comparison"
+                ),
               ),
             ),
-          ),
-          div(
-            uiOutput(ns("weather_year_ui")),
-            uiOutput(ns("climate_period_ui")),
-          ),
-          div(
-            uiOutput(ns("weather_value_ui")),
-            uiOutput(ns("climate_value_ui")),
-            uiOutput(ns("comparison_value_ui")),
-          ),
-          div(
-            style = "min-width: 100%;",
-            uiOutput(ns("date_slider_ui")),
-            uiOutput(ns("date_btns_ui")),
-          ),
-          uiOutput(ns("display_opts_ui"))
+            div(
+              uiOutput(ns("weather_year_ui")),
+              uiOutput(ns("climate_period_ui")),
+            ),
+            div(
+              uiOutput(ns("weather_value_ui")),
+              uiOutput(ns("climate_value_ui")),
+              uiOutput(ns("comparison_value_ui")),
+            ),
+            div(
+              style = "min-width: 100%;",
+              uiOutput(ns("date_slider_ui")),
+              uiOutput(ns("date_btns_ui")),
+            ),
+            uiOutput(ns("display_opts_ui"))
+          )
         )
       })
 
-      ## weather_year ----
+      # weather year selector
       output$weather_year_ui <- renderUI({
         type <- req(input$data_type)
         req(type %in% c("weather", "comparison"))
@@ -94,7 +105,7 @@ mapServer <- function() {
         )
       })
 
-      ## climate_period ----
+      # climate period selector
       output$climate_period_ui <- renderUI({
         type <- req(input$data_type)
         req(type %in% c("climate", "comparison"))
@@ -108,7 +119,7 @@ mapServer <- function() {
         )
       })
 
-      ## weather_value ----
+      # weather data selector
       output$weather_value_ui <- renderUI({
         type <- req(input$data_type)
         req(type == "weather")
@@ -122,7 +133,7 @@ mapServer <- function() {
         )
       })
 
-      ## climate_value ----
+      # climate data selector
       output$climate_value_ui <- renderUI({
         type <- req(input$data_type)
         req(type == "climate")
@@ -136,7 +147,7 @@ mapServer <- function() {
         )
       })
 
-      ## comparison_value ----
+      # comparison data selector
       output$comparison_value_ui <- renderUI({
         type <- req(input$data_type)
         req(type == "comparison")
@@ -150,7 +161,9 @@ mapServer <- function() {
         )
       })
 
-      ## date_slider ----
+
+      ## Date selector UI ----
+
       output$date_slider_ui <- renderUI({
         i <- list(type = req(input$data_type))
         opts <- list()
@@ -194,7 +207,6 @@ mapServer <- function() {
         )
       })
 
-      ## observe: date_slider ----
       # store date slider values in rv
       observe({
         dt <- req(input$date_slider)
@@ -255,8 +267,8 @@ mapServer <- function() {
       })
 
 
-      ## display options ----
-      ## legend_autoscale ----
+      ## Manual gradient UI ----
+
       output$display_opts_ui <- renderUI({
         div(
           tags$label("Display options"),
@@ -271,7 +283,6 @@ mapServer <- function() {
         )
       })
 
-      ## legend_range ----
       output$legend_range <- renderUI({
         opts <- list()
         if (isTRUE(input$legend_autoscale)) {
@@ -304,7 +315,7 @@ mapServer <- function() {
       })
 
 
-      # MAP ----
+      # MAP --------------------------------------------------------------------
 
       basemaps <- tribble(
         ~label, ~provider,
@@ -326,6 +337,15 @@ mapServer <- function() {
         counties = "Counties/Regions",
         grid = "Data grid"
       )
+
+
+      ## Map title ----
+
+      output$map_title <- renderText({
+        opts <- req(rv$grid_opts)
+        cols <- OPTS$grid_cols[[opts$type]]
+        setNames(names(cols), cols)[[opts$col]]
+      })
 
 
       ## Initialize map ----
@@ -410,7 +430,7 @@ mapServer <- function() {
       })
 
 
-      # MAP GRID ----
+      # MAP GRID ---------------------------------------------------------------
 
       ## Assign grid data ----
 
@@ -589,9 +609,9 @@ mapServer <- function() {
       })
 
 
-      # SELECTED GRID ----
+      # SELECTED GRID ----------------------------------------------------------
 
-      ## Set selected point on map click ----
+      # Set selected point on map click
       observeEvent(input$map_shape_click, {
         id <- req(input$map_shape_click$id)
         if (id != "selected") {
@@ -599,8 +619,8 @@ mapServer <- function() {
         }
       })
 
-
-      ## Draw selected grid on map ----
+      # Draw selected grid on map
+      # TODO: add a popup with more information?
       observe({
         map <- leafletProxy(ns("map"))
 
@@ -621,14 +641,12 @@ mapServer <- function() {
             layerId = "selected",
             weight = .5, opacity = 1, color = "black",
             fillOpacity = 0,
-            label = ~shiny::HTML(paste0(label, "<br><i>This location is shown in the charts below.</i>")),
+            label = ~shiny::HTML(paste0(label, "<br><i>Selected location</i>")),
             options = pathOptions(pane = "selected_grid")
           )
       })
 
-
-      ## Draw user location on map ----
-
+      # Add user location pin map after map zooms in
       observe({
         loc <- req(input$user_loc)
         loc_grid <- lapply(loc, function(x) round(x, 1))
@@ -649,11 +667,23 @@ mapServer <- function() {
         })
       })
 
+      # hide location pin on click
       observeEvent(input$map_marker_click, {
         req(input$map_marker_click$id == "user_loc")
         leafletProxy("map") %>%
           removeMarker("user_loc")
       })
+
+      # show selected grid below map
+      output$lat_lng_ui <- renderUI({
+        loc <- rv$selected_grid
+        msg <- if (is.null(loc)) "None" else sprintf("%.1f°N, %.1f°W", loc$lat, loc$lng)
+
+        p(strong("Selected grid:"), msg)
+      })
+
+
+      # RETURN -----------------------------------------------------------------
 
       return(reactive(list(
         selected_grid = rv$selected_grid

@@ -25,15 +25,19 @@ body {
   max-height: min(90vh, 120vw);
 }
 
-.leaflet-control.map-title {
-  transform: translate(-50%, 20%);
-  position: fixed !important;
-  left: 50%;
+.map-title {
+  position: absolute;
   text-align: center;
-  padding-left: 10px; 
-  padding-right: 10px; 
+  width: 100%;
   font-weight: bold;
   font-size: 20px;
+  margin-top: 10px;
+  z-index: 999;
+}
+
+
+.leaflet-control-attribution {
+  display: none;
 }
 
 a, a:hover, a:focus {

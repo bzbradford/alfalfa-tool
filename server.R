@@ -120,23 +120,16 @@ server <- function(input, output, session) {
       )
     } else {
       tagList(
-        # uiOutput("lat_lng_ui"),
         tabsetPanel(
           tabPanel("Weather plot", weatherPlotUI()),
           tabPanel("Climate plot", climatePlotUI()),
           tabPanel("Custom plot", customPlotUI()),
-          # tabPanel("Alfalfa cutting risk")
         )
       )
     }
     # validate(need(rv$loc_ready, "Please select a grid cell on the map to view detailed weather data for that location. Use the crosshair icon on the map to automatically select your location."))
   })
 
-  ## lat_lng_ui ----
-  output$lat_lng_ui <- renderUI({
-    loc <- req(rv$loc)
-    p(strong("Selected grid:"), sprintf("%.1f°N, %.1f°W", loc$lat, loc$lng))
-  })
 
   ## about_ui ----
   output$about_ui <- renderUI({

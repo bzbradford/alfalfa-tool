@@ -121,6 +121,7 @@ gdd_sine <- function(tmin, tmax, base, upper) {
 
 # Defs ----
 
+style <- read_file("www/style.css") %>% str_replace_all("[\r\n]", " ")
 cur_yr <- year(yesterday())
 OPTS <- list(
   # map extents
@@ -186,17 +187,17 @@ OPTS <- list(
   smoothable_climate = c("min_temp", "max_temp", "mean_temp", "gdd41", "gdd50", "frost", "freeze", "frost_by", "freeze_by"),
   grid_cols = list(
     weather = list(
-      "Mean daily temp (F)" = "mean_temp",
-      "Min daily temp (F)" = "min_temp",
-      "Max daily temp (F)" = "max_temp",
+      "Mean daily temp (°F)" = "mean_temp",
+      "Min daily temp (°F)" = "min_temp",
+      "Max daily temp (°F)" = "max_temp",
       "Daily GDD41 accumulation" = "gdd41",
       "Daily GDD50 accumulation" = "gdd50",
       "Cumulative GDD41" = "gdd41cum",
       "Cumulative GDD50" = "gdd50cum"),
     climate = list(
-      "Mean daily temp (F)" = "mean_temp",
-      "Min daily temp (F)" = "min_temp",
-      "Max daily temp (F)" = "max_temp",
+      "Mean daily temp (°F)" = "mean_temp",
+      "Min daily temp (°F)" = "min_temp",
+      "Max daily temp (°F)" = "max_temp",
       "Mean daily GDD41" = "gdd41",
       "Mean daily GDD50" = "gdd50",
       "Mean cumulative GDD41" = "gdd41cum",
@@ -206,9 +207,9 @@ OPTS <- list(
       "Cumulative probability of frost" = "frost_by",
       "Cumulative probability of hard freeze" = "freeze_by"),
     comparison = list(
-      "Mean daily temp vs climate average (F)" = "mean_temp",
-      "Min daily temp vs climate average (F)" = "min_temp",
-      "Max daily temp vs climate average (F)" = "max_temp",
+      "Mean daily temp vs climate average (°F)" = "mean_temp",
+      "Min daily temp vs climate average (°F)" = "min_temp",
+      "Max daily temp vs climate average (°F)" = "max_temp",
       "Daily GDD41 vs climate average" = "gdd41",
       "Daily GDD50 vs climate average" = "gdd50",
       "Cumul. GDD41 vs climate average" = "gdd41cum",
