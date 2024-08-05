@@ -294,9 +294,7 @@ timingServer <- function(loc_data) {
             name = "GDD41 since last cutting",
             x = ~date, y = ~gdd_since_cut,
             type = "scatter", mode = "lines",
-            line = list(
-              color = "#00a038",
-              shape = "spline"),
+            line = list(color = "#00a038"),
             hovertemplate = "%{y:.1f}",
             yaxis = "y1"
           ) %>%
