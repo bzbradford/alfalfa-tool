@@ -22,18 +22,35 @@ suppressMessages({
 
 # Utility functions ----
 
-yesterday <- function() Sys.Date() - 1
+# for agweather
+yesterday <- function() {
+  as.Date(format(Sys.time() - 60 * 60, tz = "America/Chicago")) - 1
+}
 
 make_date <- function(y, m, d) {
   as_date(paste(y, m, d, sep = "-"))
 }
 
+# accepts date or year
 start_of_year <- function(d = Sys.Date()) {
-  make_date(year(d), 1, 1)
+  if (is.Date(d)) {
+    make_date(year(d), 1, 1)
+  } else {
+    make_date(d, 1, 1)
+  }
 }
 
+# accepts date or year
 end_of_year <- function(d = Sys.Date()) {
-  make_date(year(d), 12, 31)
+  if (is.Date(d)) {
+    make_date(year(d), 12, 31)
+  } else {
+    make_date(d, 12, 31)
+  }
+}
+
+align_dates <- function(target_date, ref_date) {
+  start_of_year(ref_date) + yday(target_date) - 1
 }
 
 clamp <- function(x, left, right) {
@@ -101,62 +118,38 @@ gdd_sine <- function(tmin, tmax, base, upper) {
   }
 }
 
+
 # Defs ----
 
-cur_yr <- year(Sys.Date() - 1)
+style <- read_file("www/style.css") %>% str_replace_all("[\r\n]", " ")
+cur_yr <- year(yesterday())
 OPTS <- list(
+  # map extents
   min_lat = 42.4,
   max_lat = 47.1,
   min_lng = -93.0,
   max_lng = -86.8,
+
+  # date settings
   start_date = as_date(paste0(cur_yr - 1, "-1-1")),
-  weather_date_fmt = "%b %-d, %Y (day %-j)",
-  climate_date_fmt = "%b %-d (day %-j)",
+
+  # interface settings
+  weather_years = c(cur_yr, cur_yr - 1),
+  weather_date_fmt = "%b %-d, %Y",
+  climate_date_fmt = "%b %-d",
   weather_date_max = NULL, # set in server
   climate_date_min = NULL, # set in server
   climate_date_max = NULL, # set in server
+  max_cut_dates = 5,
+  cut_freq_choices = seq(800, 1200, by = 100),
+  cut_freq_default = 1000,
   climate_period_choices = list(
     "10-year climate average (2013-2023)" = "c10",
-    "5-year climate average (2018-2023)" = "c5"
-  ),
+    "5-year climate average (2018-2023)" = "c5"),
   data_smoothing_choices = list(
     "Daily values (no smoothing)" = 1,
     "Weekly rolling mean" = 7,
-    "14-day rolling mean" = 14
-  ),
-  grid_cols = list(
-    weather = list(
-      "Mean daily temp (F)" = "mean_temp",
-      "Min daily temp (F)" = "min_temp",
-      "Max daily temp (F)" = "max_temp",
-      "Daily GDD41 accumulation" = "gdd41",
-      "Daily GDD50 accumulation" = "gdd50",
-      "Cumulative GDD41" = "gdd41cum",
-      "Cumulative GDD50" = "gdd50cum"
-    ),
-    climate = list(
-      "Mean daily temp (F)" = "mean_temp",
-      "Min daily temp (F)" = "min_temp",
-      "Max daily temp (F)" = "max_temp",
-      "Mean daily GDD41" = "gdd41",
-      "Mean daily GDD50" = "gdd50",
-      "Mean cumulative GDD41" = "gdd41cum",
-      "Mean cumulative GDD50" = "gdd50cum",
-      "Mean probability of frost on day" = "frost",
-      "Mean probability of hard freeze on day" = "freeze",
-      "Cumulative probability of frost" = "frost_by",
-      "Cumulative probability of hard freeze" = "freeze_by"
-    ),
-    comparison = list(
-      "Mean daily temp vs climate average (F)" = "mean_temp",
-      "Min daily temp vs climate average (F)" = "min_temp",
-      "Max daily temp vs climate average (F)" = "max_temp",
-      "Daily GDD41 vs climate average" = "gdd41",
-      "Daily GDD50 vs climate average" = "gdd50",
-      "Cumul. GDD41 vs climate average" = "gdd41cum",
-      "Cumul. GDD50 vs climate average" = "gdd50cum"
-    )
-  ),
+    "14-day rolling mean" = 14),
   custom_plot_elems = list(
     "Weather - Temperature" = "weather_temp",
     "Weather - GDD/day" = "weather_gdd",
@@ -164,10 +157,63 @@ OPTS <- list(
     "Climate - Temperature" = "climate_temp",
     "Climate - GDD/day" = "climate_gdd",
     "Climate - Cumulative GDD" = "climate_gddcum",
-    "Climate - Frost/Freeze probability" = "climate_frost"
-  ),
+    "Climate - Frost/Freeze probability" = "climate_frost"),
+
+  # boilerplate
+  location_validation_msg = "Please select a grid cell in the map above to view detailed weather data for that location. Use the crosshair icon on the map to automatically select your location.",
+
+  # plotly settings
+  plot_date_axis_climate = list(
+    title = "Date",
+    dtick = "M1", tickformat = "%b",
+    hoverformat = "%b %d (day %j)",
+    domain = c(0, .95)),
+  plot_date_axis_weather = list(
+    title = "Date",
+    dtick = "M1", tickformat = "%b",
+    hoverformat = "%b %d, %Y (day %j)",
+    domain = c(0, .95)),
+  plot_legend = list(
+    orientation = "h",
+    xanchor = "center",
+    x = .5, y = -.15),
+  plot_line_width = 1.5,
+
+  # column defs
+  cumulative_cols = c("gdd41cum", "gdd50cum"),
+  percent_cols = c("frost", "freeze", "frost_by", "freeze_by"),
+  comparison_cols = c("min_temp", "max_temp", "gdd41", "gdd50"),
   smoothable_weather = c("min_temp", "max_temp", "mean_temp", "gdd41", "gdd50"),
-  smoothable_climate = c("min_temp", "max_temp", "mean_temp", "gdd41", "gdd50", "frost", "freeze", "frost_by", "freeze_by")
+  smoothable_climate = c("min_temp", "max_temp", "mean_temp", "gdd41", "gdd50", "frost", "freeze", "frost_by", "freeze_by"),
+  grid_cols = list(
+    weather = list(
+      "Mean daily temp (°F)" = "mean_temp",
+      "Min daily temp (°F)" = "min_temp",
+      "Max daily temp (°F)" = "max_temp",
+      "Daily GDD41 accumulation" = "gdd41",
+      "Daily GDD50 accumulation" = "gdd50",
+      "Cumulative GDD41" = "gdd41cum",
+      "Cumulative GDD50" = "gdd50cum"),
+    climate = list(
+      "Mean daily temp (°F)" = "mean_temp",
+      "Min daily temp (°F)" = "min_temp",
+      "Max daily temp (°F)" = "max_temp",
+      "Mean daily GDD41" = "gdd41",
+      "Mean daily GDD50" = "gdd50",
+      "Mean cumulative GDD41" = "gdd41cum",
+      "Mean cumulative GDD50" = "gdd50cum",
+      "Mean probability of frost on day" = "frost",
+      "Mean probability of hard freeze on day" = "freeze",
+      "Cumulative probability of frost" = "frost_by",
+      "Cumulative probability of hard freeze" = "freeze_by"),
+    comparison = list(
+      "Mean daily temp vs climate average (°F)" = "mean_temp",
+      "Min daily temp vs climate average (°F)" = "min_temp",
+      "Max daily temp vs climate average (°F)" = "max_temp",
+      "Daily GDD41 vs climate average" = "gdd41",
+      "Daily GDD50 vs climate average" = "gdd50",
+      "Cumul. GDD41 vs climate average" = "gdd41cum",
+      "Cumul. GDD50 vs climate average" = "gdd50cum"))
 )
 
 
@@ -214,6 +260,26 @@ add_climate_cols <- function(.data) {
     )
 }
 
+smooth_weather <- function(.data, width) {
+  smooth_cols(.data, OPTS$smoothable_weather, width)
+}
+smooth_climate <- function(.data, width) {
+  smooth_cols(.data, OPTS$smoothable_climate, width)
+}
+smooth_cols <- function(.data, cols, width) {
+  stopifnot(is.character(cols), is.numeric(width))
+  if (width == 1) return(.data)
+  mutate(.data, across(
+    all_of(cols),
+    ~zoo::rollapply(.x, width = width, FUN = mean, na.rm = T, partial = T)
+  ))
+}
+
+remove_weather_cols <- function(.data) {
+  drop_cols <- c("year", "yday", "mean_temp", "frost", "freeze", "gdd41cum", "gdd50cum")
+  .data %>% select(-all_of(drop_cols))
+}
+
 add_weather_cols <- function(.data) {
   .data %>%
     arrange(lat, lng, date) %>%
@@ -254,7 +320,7 @@ get_weather_grid <- function(d = yesterday()) {
         gdd50 = calc_gdd(min_temp, max_temp, 50, 86)
       )
   } else {
-    message(str_glue("Failed to retrieve weather data for {date}"))
+    message(str_glue("Failed to retrieve weather data for {d}"))
     tibble()
   }
 }
@@ -281,236 +347,18 @@ fill_weather <- function(dates = weather_dates()) {
   }
 
   # save minimal dataset
-  weather %>% write_rds("data/weather.rds", "gz")
+  weather %>%
+    remove_weather_cols() %>%
+    write_feather("data/weather.feather")
 
   # build additional cols
   weather <<- weather %>% add_weather_cols()
 }
 
 
-## UI builders ----
-
-add_climate_period_ui <- function(id) {
-  radioButtons(
-    inputId = id,
-    label = "Climate period",
-    choices = list(
-      "10-year climate average (2013-2023)" = "c10",
-      "5-year climate average (2018-2023)" = "c5"
-    )
-  )
-}
-
-add_smoothing_ui <- function(id) {
-  selectInput(
-    inputId = id,
-    label = "Data smoothing options",
-    choices = list(
-      "Daily observations (no smoothing)" = 1,
-      "Weekly rolling mean" = 7,
-      "14-day rolling mean" = 14
-    )
-  )
-}
-
-
-## Plot helpers ----
-
-set_axis <- function(plt, yaxis, title) {
-  axis <-  list(
-    title = title,
-    zeroline = F
-  )
-  if (yaxis == "y1") {
-    plt %>% layout(yaxis = axis)
-  } else {
-    axis$overlaying = "y"
-    axis$side = "right"
-    plt %>% layout(yaxis2 = axis)
-  }
-}
-
-add_temp_traces <- function(plt, df, yaxis = "y1", label = "", dash = F) {
-  dash <- ifelse(dash, "dashdot", "none")
-  width <- 1
-
-  plt %>%
-    add_trace(
-      name = paste0(label, "Min temp"),
-      x = df$date, y = df$min_temp,
-      type = "scatter", mode = "lines",
-      line = list(
-        color = "cornflowerblue",
-        width = width,
-        shape = "spline",
-        dash = dash),
-      hovertemplate = "%{y:.1f}°F",
-      yaxis = yaxis
-    ) %>%
-    add_trace(
-      name = paste0(label, "Mean temp"),
-      x = df$date, y = df$mean_temp,
-      type = "scatter", mode = "lines",
-      line = list(
-        color = "orange",
-        width = width,
-        shape = "spline",
-        dash = dash),
-      hovertemplate = "%{y:.1f}°F",
-      yaxis = yaxis
-    ) %>%
-    add_trace(
-      name = paste0(label, "Max temp"),
-      x = df$date, y = df$max_temp,
-      type = "scatter", mode = "lines",
-      line = list(
-        color = "#c5050c",
-        width = width,
-        shape = "spline",
-        dash = dash),
-      hovertemplate = "%{y:.1f}°F",
-      yaxis = yaxis
-    ) %>%
-    add_trace(
-      name = paste0(label, "Frost (<32F)"),
-      x = df$date, y = if_else(df$min_temp <= 32, 32, NA),
-      type = "scatter", mode = "lines",
-      line = list(
-        color = "orchid",
-        width = width,
-        dash = dash),
-      hovertemplate = "Yes",
-      yaxis = yaxis
-    ) %>%
-    add_trace(
-      name = paste0(label, "Hard freeze (<28F)"),
-      x = df$date, y = if_else(df$min_temp <= 28, 28, NA),
-      type = "scatter", mode = "lines",
-      line = list(
-        color = "purple",
-        width = width,
-        dash = dash),
-      hovertemplate = "Yes",
-      yaxis = yaxis
-    ) %>%
-    set_axis(yaxis, "Temperature (F)")
-}
-
-add_gdd_daily_traces <- function(plt, df, yaxis = "y1", label = "", dash = F) {
-  dash <- ifelse(dash, "dashdot", "none")
-  width <- 1
-
-  plt %>%
-    add_trace(
-      name = paste(label, "GDD41/day"),
-      x = df$date, y = df$gdd41,
-      type = "scatter", mode = "lines",
-      line = list(
-        color = "green",
-        width = width,
-        dash = dash),
-      hovertemplate = "%{y:.1f}",
-      yaxis = yaxis
-    ) %>%
-    add_trace(
-      name = paste(label, "GDD50/day"),
-      x = df$date, y = df$gdd50,
-      type = "scatter", mode = "lines",
-      line = list(
-        color = "peru",
-        width = width,
-        dash = dash),
-      hovertemplate = "%{y:.1f}",
-      yaxis = yaxis
-    ) %>%
-    set_axis(yaxis, "GDD accumulation/day")
-}
-
-add_gdd_cum_traces <- function(plt, df, yaxis = "y1", label = "", dash = F) {
-  dash <- ifelse(dash, "dashdot", "none")
-  width <- 1
-
-  plt %>%
-    add_trace(
-      name = paste0(label, "GDD41 (cumul.)"),
-      x = df$date, y = df$gdd41cum,
-      type = "scatter", mode = "lines",
-      line = list(
-        color = "olivedrab",
-        width = width,
-        dash = dash),
-      hovertemplate = "%{y:.1f}",
-      yaxis = yaxis
-    ) %>%
-    add_trace(
-      name = paste0(label, "GDD50 (cumul.)"),
-      x = df$date, y = df$gdd50cum,
-      type = "scatter", mode = "lines",
-      line = list(
-        color = "chocolate",
-        width = width,
-        dash = dash),
-      hovertemplate = "%{y:.1f}",
-      yaxis = yaxis
-    ) %>%
-    set_axis(yaxis, "Cumulative GDD")
-}
-
-add_frost_traces <- function(plt, df, yaxis = "y1") {
-  width <- 1
-
-  plt %>%
-    add_trace(
-      name = "Frost probability",
-      x = df$date, y = df$frost*100,
-      type = "scatter", mode = "lines",
-      line = list(
-        color = "orchid",
-        width = width,
-        shape = "spline"),
-      hovertemplate = "%{y:.1f}%",
-      yaxis = yaxis
-    ) %>%
-    add_trace(
-      name = "Hard freeze probability",
-      x = df$date, y = df$freeze*100,
-      type = "scatter", mode = "lines",
-      hovertemplate = "%{y:.1f}%",
-      line = list(
-        color = "purple",
-        width = width,
-        shape = "spline"),
-      yaxis = yaxis
-    ) %>%
-    add_trace(
-      name = "Cumul. frost prob.",
-      x = df$date, y = df$frost_by*100,
-      type = "scatter", mode = "lines",
-      hovertemplate = "%{y:.1f}%",
-      line = list(
-        color = "orchid",
-        width = width,
-        shape = "spline",
-        dash = "dot"),
-      yaxis = yaxis
-    ) %>%
-    add_trace(
-      name = "Cumul. freeze prob.",
-      x = df$date, y = df$freeze_by*100,
-      type = "scatter", mode = "lines",
-      hovertemplate = "%{y:.1f}%",
-      line = list(
-        color = "purple",
-        width = width,
-        shape = "spline",
-        dash = "dot"),
-      yaxis = yaxis
-    ) %>%
-    set_axis(yaxis, "Frost/freeze probability")
-}
-
-
 # Initialize data ----
+
+list.files("R", "*.R", full.names = T) %>% sapply(source)
 
 counties <- read_rds("data/counties.rds")
 
@@ -518,11 +366,11 @@ if (!exists("climate")) {
   climate <- read_rds("data/climate.rds") %>% lapply(add_climate_cols)
 }
 
-if (file.exists("data/weather.rds")) {
-  weather <- read_rds("data/weather.rds") %>%
-    add_weather_cols()
+if (file.exists("data/weather.feather")) {
+  if (!exists("weather") || max(weather$date) != yesterday())
+  weather <- read_feather("data/weather.feather") %>% add_weather_cols()
 }
 
 # delete some weather for testing
-# weather <- weather %>% filter(date < "2024-07-15")
+# weather <- weather %>% filter(date < Sys.Date() - 3)
 # weather %>% write_feather("data/weather.feather")

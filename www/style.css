@@ -1,10 +1,13 @@
 
+/* modified classes */
+
 body {
   font-family: 'Lato', sans-serif;
+  padding-top: 70px;
 }
 
 .container-fluid {
-  max-width: 1200px;
+  max-width: 1600px;
   margin: auto;
 }
 
@@ -22,14 +25,37 @@ body {
   max-height: min(90vh, 120vw);
 }
 
+.map-title {
+  position: absolute;
+  text-align: center;
+  width: 100%;
+  font-weight: bold;
+  font-size: 20px;
+  margin-top: 10px;
+  z-index: 999;
+}
+
+
+.leaflet-control-attribution {
+  display: none;
+}
+
 a, a:hover, a:focus {
   color: #48a67b;
 }
+
+.datepicker {
+  z-index: 9999 !important;
+}
+
+
+/* new classes */
 
 .date-btns {
   display: inline-flex;
   width: 100%;
   gap: 5px;
+  margin-bottom: 1em;
 }
 
 .date-btns > button {
@@ -40,6 +66,7 @@ a, a:hover, a:focus {
   padding: 1em;
   text-align: center;
   font-style: italic;
+  font-size: small;
 }
 
 .option-well {
@@ -52,6 +79,34 @@ a, a:hover, a:focus {
 
 .inline-flex {
   display: inline-flex;
-  gap: 20px;
+  column-gap: 20px;
   flex-wrap: wrap;
+  margin-bottom: 10px;
 }
+
+.inline-flex > * > .shiny-date-input {
+  margin-bottom: 0;
+}
+
+.map-display-opts > * > .checkbox {
+  margin: 0;
+}
+
+/* remove bottom padding in bscollapse */
+.panel-body {
+  padding-bottom: 0;
+}
+
+/* animate collapse arrow */
+.panel-title > a:before {
+  display: inline-block;
+  margin-right: 5px;
+  content: "▼";
+  transition: 0.25s;
+  transform: rotate(-90deg);
+}
+
+.panel-title > a[aria-expanded=true]:before {
+  transform: rotate(0);
+}
+

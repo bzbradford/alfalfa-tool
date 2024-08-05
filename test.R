@@ -186,3 +186,95 @@ plot_ly() %>%
 
 
 
+
+
+# cut timing --------------------------------------------------------------
+
+loc <- list(lat = 45, lng = -89)
+
+wx <- weather %>%
+  filter(lat == loc$lat, lng == loc$lng, year == 2024) %>%
+  select(date, yday, gdd41) %>%
+  mutate(source = "weather")
+
+cl <- climate$c10 %>%
+  filter(lat == loc$lat, lng == loc$lng) %>%
+  filter(yday > max(wx$yday)) %>%
+  select(yday, gdd41) %>%
+  mutate(date = start_of_year(last(wx$date)) + yday - 1) %>%
+  mutate(source = "projected")
+
+cl_risk <- climate$c10 %>%
+  filter(lat == loc$lat, lng == loc$lng) %>%
+  select(yday, freeze_by)
+
+bind_rows(wx, cl)
+
+cut_points <- c(
+  -1,
+  yday(as_date(c("2024-6-12", "2024-7-21", "2024-8-30"))),
+  366
+)
+
+df <- bind_rows(wx, cl) %>%
+  left_join(cl_risk) %>%
+  mutate(cutting = cut(yday, cut_points)) %>%
+  mutate(gdd41cum = cumsum(gdd41)) %>%
+  mutate(
+    days_since_cut = n(),
+    gdd_since_cut = cumsum(gdd41),
+    .by = cutting
+  )
+
+df %>%
+  plot_ly() %>%
+  add_trace(
+    name = "GDD41 since Jan 1",
+    x = ~date, y = ~gdd41cum,
+    type = "scatter", mode = "lines",
+    hovertemplate = "%{y:.1f}",
+    line = list(dash = "dot"),
+    yaxis = "y1"
+  ) %>%
+  add_trace(
+    name = "GDD41 since last cutting",
+    x = ~date, y = ~gdd_since_cut,
+    type = "scatter", mode = "lines",
+    hovertemplate = "%{y:.1f}",
+    # line = list(color = ~cutting),
+    yaxis = "y1"
+  ) %>%
+  add_trace(
+    name = "Hard freeze prob.",
+    x = ~date, y = ~freeze_by*100,
+    type = "scatter", mode = "lines",
+    hovertemplate = "%{y:.1f}%",
+    line = list(
+      color = "purple",
+      shape = "spline",
+      width = 1.5),
+    yaxis = "y2"
+  ) %>%
+  layout(
+    title = "Weather",
+    xaxis = list(title = "Date"),
+    yaxis = list(title = "Growing degree days (base 41F)"),
+    yaxis2 = list(
+      title = "Cumulative hard freeze probability",
+      overlaying = "y",
+      side = "right"
+    ),
+    hovermode = "x unified",
+    shapes = list(
+      rect(900, 1100, color = "green"),
+      rect(0, 360, color = "blue"),
+      vline()
+    )
+  )
+
+
+# find gdd closest to 500
+
+df[which.min(abs(1000 - df$gdd41cum)),]
+
+
