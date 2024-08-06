@@ -4,6 +4,6 @@
 .Ruserdata
 .Rprofile
 
-data/
-**/*.rds
-**/*.feather
+*.rds
+*.feather
+*.geojson
