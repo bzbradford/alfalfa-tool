@@ -161,7 +161,7 @@ OPTS <- list(
     "Climate - Frost/Freeze probability" = "climate_frost"),
 
   # boilerplate
-  location_validation_msg = "Please select a grid cell in the map above to view detailed weather data for that location. Use the crosshair icon on the map to automatically select your location.",
+  location_validation_msg = "Please select a grid cell on the map first. Use the crosshair icon on the map to automatically select your location, or enter a place name in the searchbox below the map.",
 
   # plotly settings
   plot_date_axis_climate = list(

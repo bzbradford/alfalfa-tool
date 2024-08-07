@@ -114,20 +114,15 @@ server <- function(input, output, session) {
 
   ## plots_ui ----
   output$plots_ui <- renderUI({
-    if (!rv$loc_ready) {
-      tagList(
-        p("Please select a location on the map to view detailed weather and climate charts.")
+    validate(need(rv$loc_ready, OPTS$location_validation_msg))
+
+    tagList(
+      tabsetPanel(
+        tabPanel("Weather plot", weatherPlotUI()),
+        tabPanel("Climate plot", climatePlotUI()),
+        tabPanel("Custom plot", customPlotUI()),
       )
-    } else {
-      tagList(
-        tabsetPanel(
-          tabPanel("Weather plot", weatherPlotUI()),
-          tabPanel("Climate plot", climatePlotUI()),
-          tabPanel("Custom plot", customPlotUI()),
-        )
-      )
-    }
-    # validate(need(rv$loc_ready, "Please select a grid cell on the map to view detailed weather data for that location. Use the crosshair icon on the map to automatically select your location."))
+    )
   })
 
 
