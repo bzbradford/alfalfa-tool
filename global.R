@@ -121,6 +121,7 @@ gdd_sine <- function(tmin, tmax, base, upper) {
 
 # Defs ----
 
+google_key <- Sys.getenv("google_places_key")
 style <- read_file("www/style.css") %>% str_replace_all("[\r\n]", " ")
 cur_yr <- year(yesterday())
 OPTS <- list(
@@ -144,8 +145,8 @@ OPTS <- list(
   cut_freq_choices = seq(800, 1200, by = 100),
   cut_freq_default = 1000,
   climate_period_choices = list(
-    "10-year climate average (2013-2023)" = "c10",
-    "5-year climate average (2018-2023)" = "c5"),
+    "10-year average (2013-2023)" = "c10",
+    "5-year average (2018-2023)" = "c5"),
   data_smoothing_choices = list(
     "Daily values (no smoothing)" = 1,
     "Weekly rolling mean" = 7,

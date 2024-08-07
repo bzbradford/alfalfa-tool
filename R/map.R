@@ -9,7 +9,10 @@ mapUI <- function() {
       div(class = "map-title", textOutput(ns("map_title"))),
       leafletOutput(ns("map"), width = "100%", height = "750px")
     ),
-    uiOutput(ns("lat_lng_ui"))
+    fluidRow(
+      column(6, uiOutput(ns("searchbox_ui"))),
+      column(6, uiOutput(ns("lat_lng_ui")))
+    )
   )
 }
 
@@ -169,39 +172,45 @@ mapServer <- function() {
         opts <- list()
 
         if (i$type == "weather") {
-          i$year = req(input$weather_year)
-          i$value = req(input$weather_value)
-          opts$fmt = OPTS$weather_date_fmt
-        } else if (i$type == "climate") {
-          i$year = year(yesterday())
-          i$period = req(input$climate_period)
-          i$value = req(input$climate_value)
-          opts$fmt = OPTS$climate_date_fmt
-        } else {
-          i$year = req(input$weather_year)
-          i$period = req(input$climate_period)
-          i$value = req(input$comparison_value)
-          opts$fmt = OPTS$weather_date_fmt
+          i$year <- req(input$weather_year)
+          i$value <- req(input$weather_value)
+          opts$fmt <- OPTS$weather_date_fmt
+          opts$max <- min(yesterday(), end_of_year(i$year))
         }
 
-        opts$min = start_of_year(i$year)
-        opts$max = min(yesterday(), end_of_year(i$year))
-        opts$value = min(
+        if (i$type == "climate") {
+          i$year <- year(yesterday())
+          i$period <- req(input$climate_period)
+          i$value <- req(input$climate_value)
+          opts$fmt <- OPTS$climate_date_fmt
+          opts$max <- end_of_year(i$year)
+        }
+
+        if (i$type == "comparison") {
+          i$year <- req(input$weather_year)
+          i$period <- req(input$climate_period)
+          i$value <- req(input$comparison_value)
+          opts$fmt <- OPTS$weather_date_fmt
+          opts$max <- min(yesterday(), end_of_year(i$year))
+        }
+
+        opts$min <- start_of_year(i$year)
+        opts$value <- min(
           align_dates(coalesce(rv$date_end, yesterday()), i$year),
           opts$max
         )
+
+        # enable double-ended slider for cumulative gdd
         if (i$value %in% OPTS$cumulative_cols) {
-          opts$value = c(
+          opts$value <- c(
             align_dates(coalesce(rv$date_start, opts$min), i$year),
             opts$value
           )
         }
 
         sliderInput(
-          inputId = ns("date_slider"),
-          label = "Date",
-          min = opts$min,
-          max = opts$max,
+          ns("date_slider"), "Date",
+          min = opts$min, max = opts$max,
           value = opts$value,
           timeFormat = opts$fmt
         )
@@ -375,11 +384,7 @@ mapServer <- function() {
               title = "Show my location on the map",
               onClick = JS("
                 function(btn, map) {
-                  map.locate({
-                    setView: true,
-                    enableHighAccuracy: false,
-                    maxZoom: 10
-                  }).on('locationfound', (event) => {
+                  map.locate({ setView: false }).on('locationfound', (event) => {
                     Shiny.setInputValue('map-user_loc', event.latlng, {priority: 'event'})
                   })
                 }
@@ -391,7 +396,7 @@ mapServer <- function() {
               title = "Reset map view",
               onClick = JS("
                 function(btn, map) {
-                  map.fitBounds([[47.1, -86.8], [42.4, -92.9]])
+                  map.fitBounds([[47.1, -86.8], [42.4, -93.0]])
                 }
               ")
             )
@@ -611,6 +616,17 @@ mapServer <- function() {
 
       # SELECTED GRID ----------------------------------------------------------
 
+      # selects only if within bounds
+      select_grid <- function(lat, lng) {
+        req(between(lat, OPTS$min_lat, OPTS$max_lat))
+        req(between(lng, OPTS$min_lng, OPTS$max_lng))
+        rv$selected_grid <- list(
+          lat = round(lat, 1),
+          lng = round(lng, 1)
+        )
+      }
+
+      ## Handle map click ----
       # Set selected point on map click
       observeEvent(input$map_shape_click, {
         id <- req(input$map_shape_click$id)
@@ -619,7 +635,7 @@ mapServer <- function() {
         }
       })
 
-      # Draw selected grid on map
+      ## Draw selected grid ----
       # TODO: add a popup with more information?
       observe({
         map <- leafletProxy(ns("map"))
@@ -629,12 +645,12 @@ mapServer <- function() {
           return()
         }
 
-        loc <- rv$selected_grid
+        loc <- req(rv$selected_grid)
+        grid <- req(rv$grid_data)
         map %>%
           removeShape("selected_grid") %>%
           addRectangles(
-            data = rv$grid_data %>%
-              filter(lat == loc$lat, lng == loc$lng),
+            data = filter(grid, lat == loc$lat, lng == loc$lng),
             lat1 = ~lat - .05, lat2 = ~lat + .05,
             lng1 = ~lng - .05, lng2 = ~lng + .05,
             group = layers$grid,
@@ -646,14 +662,23 @@ mapServer <- function() {
           )
       })
 
+      ## Handle user location ----
       # Add user location pin map after map zooms in
       observe({
         loc <- req(input$user_loc)
-        loc_grid <- lapply(loc, function(x) round(x, 1))
 
+        # center map on new location
+        map <- leafletProxy(ns("map"))
+        map %>% setView(
+          lat = loc$lat,
+          lng = loc$lng,
+          zoom = 8
+        )
+
+        # select after delay for map panning
         delay(250, {
-          rv$selected_grid <- loc_grid
-          leafletProxy(ns("map")) %>%
+          select_grid(loc$lat, loc$lng)
+          map %>%
             addMarkers(
               lat = loc$lat, lng = loc$lng,
               layerId = "user_loc",
@@ -664,6 +689,7 @@ mapServer <- function() {
                 <i>Click to remove marker.</i>
               "))
             )
+          runjs("document.getElementById('map-searchbox').value = '';")
         })
       })
 
@@ -680,6 +706,16 @@ mapServer <- function() {
         msg <- if (is.null(loc)) "None" else sprintf("%.1f°N, %.1f°W", loc$lat, loc$lng)
 
         p(strong("Selected grid:"), msg)
+      })
+
+
+      # SEARCHBOX --------------------------------------------------------------
+
+      output$searchbox_ui <- renderUI({
+        div(
+          HTML(paste0("<script async src='https://maps.googleapis.com/maps/api/js?key=", google_key, "&loading=async&libraries=places&callback=initAutocomplete'></script>")),
+          textInput(ns("searchbox"), "Find a location")
+        )
       })
 
 

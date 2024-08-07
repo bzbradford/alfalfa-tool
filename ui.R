@@ -15,6 +15,7 @@ ui <- navbarPage(
       # tags$link(rel = "stylesheet", type = "text/css", href = "style.css"),
       tags$style(style),
       useShinyjs(),
+      tags$script(src = "script.js"),
       # includeHTML("google-analytics.html"),
       # tags$script(src = "html2canvas.min.js"),
       # tags$script(src = "saveAs.js")
