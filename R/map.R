@@ -29,6 +29,14 @@ mapServer <- function() {
       ns <- session$ns
 
 
+      # test observers
+
+      # observe({
+      #   print(rv$grid_domain)
+      #   print(rv$grid_data)
+      # })
+
+
       # Reactive values ----
 
       rv <- reactiveValues(
@@ -42,9 +50,7 @@ mapServer <- function() {
         grid_data = NULL,
         grid_opts = NULL,
         grid_domain = NULL,
-        grid_pal = NULL,
-
-        map_title = "TEST"
+        grid_pal = NULL
       )
 
 
@@ -139,6 +145,10 @@ mapServer <- function() {
 
       output$smoothing_opts_ui <- renderUI({
         type <- req(input$data_type)
+        value <- if (type == "weather") req(input$weather_value)
+        else if (type == "climate") req(input$climate_value)
+        else if (type == "comparison") req(input$comparison_value)
+        req(value %in% OPTS$smoothable_cols)
         choices <- OPTS$data_smoothing_choices
 
         radioGroupButtons(
@@ -211,10 +221,11 @@ mapServer <- function() {
         } else {
           rv$date_end <- dt
           rv$date_start <-
-            if (is.null(rv$date_start)) {
+            start_date <- isolate(rv$date_start)
+            if (is.null(start_date)) {
               start_of_year(dt)
             } else {
-              start_of_year(dt) + yday(rv$date_start) - 1
+              start_of_year(dt) + yday(start_date) - 1
             }
         }
       })
@@ -337,7 +348,11 @@ mapServer <- function() {
       output$map_title <- renderUI({
         opts <- req(rv$grid_opts)
         cols <- OPTS$grid_cols[[opts$type]]
-        setNames(names(cols), cols)[[opts$col]]
+        title <- setNames(names(cols), cols)[[opts$col]]
+        if (opts$smoothing != 1) {
+          title <- paste0(title, " - ", opts$smoothing, "-day average")
+        }
+        title
       })
 
 
@@ -427,7 +442,7 @@ mapServer <- function() {
       prepare_weather_grid_data <- function(df, col, dt, smoothing) {
         df <- df %>% select(all_of(c("lat", "lng", "date", "value" = col)))
 
-        df1 <- if (smoothing > 1) {
+        df1 <- if (smoothing > 1 & (col %in% OPTS$smoothable_cols)) {
           df %>%
             filter(between(date, dt[1] - smoothing / 2, dt[1] + smoothing / 2)) %>%
             summarize(value = mean(value), .by = c(lat, lng))
@@ -752,12 +767,9 @@ mapServer <- function() {
 
       observeEvent(input$coord_search_go, {
         str <- req(input$coord_search)
-        print(str)
         try({
           coords <- parse_coords(str)
-          print(coords)
           coord_hash <- paste0("{lat:", coords$lat, ", lng:", coords$lng, "}")
-          print(coord_hash)
           cmd <- paste0("Shiny.setInputValue('map-user_loc', ", coord_hash, ", {priority: 'event'})")
           runjs(cmd)
         })

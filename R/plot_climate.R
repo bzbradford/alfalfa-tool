@@ -80,7 +80,7 @@ climatePlotServer <- function(plot_data) {
         opts$smoothing <- req(input$smoothing) %>% as.numeric()
 
         df <- rv[[opts$period]] %>%
-          smooth_climate(opts$smoothing) %>%
+          smooth_cols(opts$smoothing) %>%
           mutate(date = start_of_year() + yday - 1)
 
         plot_ly() %>%

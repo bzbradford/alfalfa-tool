@@ -78,7 +78,7 @@ weatherPlotServer <- function(plot_data) {
 
         df <- rv$weather
         if (opts$year != "All") df <- filter(df, year == opts$year)
-        df <- df %>% smooth_weather(opts$smoothing)
+        df <- df %>% smooth_cols(opts$smoothing)
 
         plt <- plot_ly() %>%
           layout(

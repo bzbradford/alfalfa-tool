@@ -184,9 +184,9 @@ customPlotServer <- function(plot_data) {
             rv$weather %>%
               filter(year == opts$year) %>%
               mutate(date = start_of_year() + yday - 1) %>%
-              smooth_weather(opts$smoothing)
+              smooth_cols(opts$smoothing)
           } else {
-            rv[[opts$period]] %>% smooth_climate(opts$smoothing)
+            rv[[opts$period]] %>% smooth_cols(opts$smoothing)
           }
 
           # add traces

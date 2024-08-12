@@ -145,8 +145,8 @@ OPTS <- list(
   cut_freq_choices = seq(800, 1200, by = 100),
   cut_freq_default = 1000,
   map_type_choices = list(
-    "Current weather" = "weather",
-    "Climate normals" = "climate",
+    "Observed weather" = "weather",
+    "Climate averages" = "climate",
     "Weather vs climate" = "comparison"
   ),
   climate_period_choices = list(
@@ -189,8 +189,6 @@ OPTS <- list(
   cumulative_cols = c("gdd41cum", "gdd50cum"),
   percent_cols = c("frost", "freeze", "frost_by", "freeze_by"),
   comparison_cols = c("min_temp", "max_temp", "mean_temp", "gdd41", "gdd50"),
-  smoothable_weather = c("min_temp", "max_temp", "mean_temp", "gdd41", "gdd50"),
-  smoothable_climate = c("min_temp", "max_temp", "mean_temp", "gdd41", "gdd50", "frost", "freeze", "frost_by", "freeze_by"),
   smoothable_cols = c("min_temp", "max_temp", "mean_temp", "gdd41", "gdd50", "frost", "freeze", "frost_by", "freeze_by"),
   grid_cols = list(
     weather = list(
@@ -284,17 +282,11 @@ add_climate_cols <- function(.data) {
     )
 }
 
-smooth_weather <- function(.data, width) {
-  smooth_cols(.data, OPTS$smoothable_weather, width)
-}
-smooth_climate <- function(.data, width) {
-  smooth_cols(.data, OPTS$smoothable_climate, width)
-}
-smooth_cols <- function(.data, cols, width) {
+smooth_cols <- function(.data, width, cols = OPTS$smoothable_cols) {
   width <- as.numeric(width)
   if (width == 1) return(.data)
   mutate(.data, across(
-    all_of(cols),
+    any_of(cols),
     ~zoo::rollapply(.x, width = width, FUN = mean, na.rm = T, partial = T)
   ))
 }
