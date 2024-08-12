@@ -249,6 +249,23 @@ pt_to_coords <- function(pt) {
   )
 }
 
+in_extent <- function(lat, lng) {
+  between(lat, OPTS$min_lat, OPTS$max_lat) &
+    between(lng, OPTS$min_lng, OPTS$max_lng)
+}
+
+parse_coords <- function(str) {
+  str <- gsub("[ °NW]", "", str)
+  parts <- str_split_1(str, ",")
+  if (length(parts) != 2) stop("Invalid coordinate format.")
+  coords <- suppressWarnings(list(
+    lat = as.numeric(parts[1]),
+    lng = as.numeric(parts[2])
+  ))
+  if (any(sapply(coords, is.na))) stop("Failed to parse coordinates.")
+  coords
+}
+
 withSpinnerProxy <- function(ui, ...) {
   ui %>% shinycssloaders::withSpinner(type = 8, color = "#30a67d", proxy.height = "400px", ...)
 }

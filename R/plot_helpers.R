@@ -58,7 +58,8 @@ add_today <- function(plt, yr = cur_yr, other_shapes = list()) {
 set_axis <- function(plt, yaxis, title) {
   axis <-  list(
     title = title,
-    zeroline = F
+    zeroline = F,
+    fixedrange = T
   )
   if (yaxis == "y1") {
     plt %>% layout(yaxis = axis)

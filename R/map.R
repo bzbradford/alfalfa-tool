@@ -6,13 +6,14 @@ mapUI <- function() {
   div(
     div(
       style = "margin-bottom: 10px;",
-      div(class = "map-title", textOutput(ns("map_title"))),
+      div(class = "map-title", uiOutput(ns("map_title"))),
       leafletOutput(ns("map"), width = "100%", height = "750px")
     ),
     fluidRow(
       column(6, uiOutput(ns("searchbox_ui"))),
-      column(6, uiOutput(ns("lat_lng_ui")))
-    )
+      column(6, uiOutput(ns("coord_search_ui")))
+    ),
+    uiOutput(ns("lat_lng_ui"))
   )
 }
 
@@ -138,10 +139,6 @@ mapServer <- function() {
 
       output$smoothing_opts_ui <- renderUI({
         type <- req(input$data_type)
-        # value <- if (type == "weather") req(input$weather_value)
-        # else if (type == "climate") req(input$climate_value)
-        # else if (type == "comparison") req(input$comparison_value)
-        # req(value %in% OPTS$smoothable_cols)
         choices <- OPTS$data_smoothing_choices
 
         radioGroupButtons(
@@ -337,7 +334,7 @@ mapServer <- function() {
 
       ## Map title ----
 
-      output$map_title <- renderText({
+      output$map_title <- renderUI({
         opts <- req(rv$grid_opts)
         cols <- OPTS$grid_cols[[opts$type]]
         setNames(names(cols), cols)[[opts$col]]
@@ -363,7 +360,7 @@ mapServer <- function() {
             overlayGroups = unlist(layers, use.names = F),
             options = layersControlOptions(collapsed = F)
           ) %>%
-          addFullscreenControl(pseudoFullscreen = T) %>%
+          # addFullscreenControl(pseudoFullscreen = T) %>%
           addEasyButtonBar(
             easyButton(
               position = "topleft",
@@ -615,12 +612,12 @@ mapServer <- function() {
 
       # selects only if within bounds
       select_grid <- function(lat, lng) {
-        req(between(lat, OPTS$min_lat, OPTS$max_lat))
-        req(between(lng, OPTS$min_lng, OPTS$max_lng))
-        rv$selected_grid <- list(
-          lat = round(lat, 1),
-          lng = round(lng, 1)
-        )
+        if (in_extent(lat, lng)) {
+          rv$selected_grid <- list(
+            lat = round(lat, 1),
+            lng = round(lng, 1)
+          )
+        }
       }
 
       ## Handle map click ----
@@ -631,6 +628,20 @@ mapServer <- function() {
           rv$selected_grid <- pt_to_coords(id)
         }
       })
+
+      ## Display grid coordinates on map ----
+      observe({
+        loc <- req(rv$selected_grid)
+
+        leafletProxy(ns("map")) %>%
+          removeControl("selected_coords") %>%
+          addControl(
+            sprintf("<b>Selected grid:</b> %.1f°N, %.1f°W", loc$lat, loc$lng),
+            position = "bottomleft",
+            layerId = "selected_coords"
+          )
+      })
+
 
       ## Draw selected grid ----
       # TODO: add a popup with more information?
@@ -661,6 +672,8 @@ mapServer <- function() {
           )
       })
 
+
+
       ## Handle user location ----
       # Add user location pin map after map zooms in
       observe({
@@ -678,6 +691,7 @@ mapServer <- function() {
         delay(250, {
           select_grid(loc$lat, loc$lng)
           map %>%
+            removeMarker("user_loc") %>%
             addMarkers(
               lat = loc$lat, lng = loc$lng,
               layerId = "user_loc",
@@ -688,7 +702,10 @@ mapServer <- function() {
                 <i>Click to remove marker.</i>
               "))
             )
-          runjs("document.getElementById('map-searchbox').value = '';")
+          runjs("
+            document.getElementById('map-searchbox').value = '';
+            document.getElementById('map-coord_search').value = '';
+          ")
         })
       })
 
@@ -699,22 +716,59 @@ mapServer <- function() {
           removeMarker("user_loc")
       })
 
-      # show selected grid below map
-      output$lat_lng_ui <- renderUI({
-        loc <- rv$selected_grid
-        msg <- if (is.null(loc)) "None" else sprintf("%.1f°N, %.1f°W", loc$lat, loc$lng)
-
-        p(strong("Selected grid:"), msg)
-      })
-
 
       # SEARCHBOX --------------------------------------------------------------
 
       output$searchbox_ui <- renderUI({
         div(
           HTML(paste0("<script async src='https://maps.googleapis.com/maps/api/js?key=", google_key, "&loading=async&libraries=places&callback=initAutocomplete'></script>")),
-          textInput(ns("searchbox"), "Find a location")
+          textInput(ns("searchbox"), "Find a location by name")
         )
+      })
+
+      output$coord_search_ui <- renderUI({
+        runjs('
+          $(document).keyup((event) => {
+            if ($("#map-coord_search").is(":focus") && (event.key == "Enter")) {
+              $("#map-coord_search_go").click();
+            }
+          });
+        ')
+        div(
+          tags$label("Find a location by coordinates"),
+          div(
+            style = "display: inline-flex; gap: 5px; max-width: 100%;",
+            textInput(
+              ns("coord_search"), label = NULL,
+              placeholder = "Enter coordinates"
+            ),
+            div(
+              style = "margin-bottom: 10px;",
+              actionButton(ns("coord_search_go"), "Go")
+            )
+          )
+        )
+      })
+
+      observeEvent(input$coord_search_go, {
+        str <- req(input$coord_search)
+        print(str)
+        try({
+          coords <- parse_coords(str)
+          print(coords)
+          coord_hash <- paste0("{lat:", coords$lat, ", lng:", coords$lng, "}")
+          print(coord_hash)
+          cmd <- paste0("Shiny.setInputValue('map-user_loc', ", coord_hash, ", {priority: 'event'})")
+          runjs(cmd)
+        })
+      })
+
+      # show selected grid below map
+      output$lat_lng_ui <- renderUI({
+        loc <- rv$selected_grid
+        msg <- if (is.null(loc)) "None" else sprintf("%.1f°N, %.1f°W", loc$lat, loc$lng)
+
+        div(strong("Currently selected location:"), msg)
       })
 
 
