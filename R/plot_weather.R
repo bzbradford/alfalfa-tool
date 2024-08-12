@@ -58,12 +58,12 @@ weatherPlotServer <- function(plot_data) {
 
       output$plot_title <- renderUI({
         loc <- req(rv$loc)
-        smoothing <- req(input$smoothing) %>% as.numeric()
+        smoothing <- req(input$smoothing)
         title <- case_match(
           smoothing,
-          1 ~ "Weather data",
-          7 ~ "7-day average weather data",
-          14 ~ "14-day average air temperature data"
+          "1" ~ "Weather data",
+          "7" ~ "7-day average weather data",
+          "14" ~ "14-day average air temperature data"
         ) %>%
           paste(sprintf("for %.1f°N, %.1f°W", loc$lat, loc$lng))
         h4(title, style = "text-align: center;")

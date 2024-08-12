@@ -49,6 +49,19 @@ a, a:hover, a:focus {
 }
 
 
+/* radioGroupButtons */
+.btn-group {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.radiobtn {
+  border-radius: 5px !important;
+}
+
+
+
 /* new classes */
 
 .date-btns {
@@ -58,8 +71,8 @@ a, a:hover, a:focus {
   margin-bottom: 1em;
 }
 
-.date-btns > button {
-  padding: 2px 5px;
+.date-btns button {
+  padding: 5px 10px;
 }
 
 .plot-caption {
@@ -81,14 +94,13 @@ a, a:hover, a:focus {
   display: inline-flex;
   column-gap: 20px;
   flex-wrap: wrap;
-  margin-bottom: 10px;
 }
 
 .inline-flex > * > .shiny-date-input {
   margin-bottom: 0;
 }
 
-.map-display-opts > * > .checkbox {
+.map-display-opts .checkbox {
   margin: 0;
 }
 
@@ -101,7 +113,7 @@ a, a:hover, a:focus {
 .panel-title > a:before {
   display: inline-block;
   margin-right: 5px;
-  content: "▼";
+  content: '▼';
   transition: 0.25s;
   transform: rotate(-90deg);
 }

@@ -9,7 +9,7 @@ suppressMessages({
   library(shinyBS) # bscollapse
   library(shinyjs) # javascript
   library(shinythemes) # theme
-  # library(shinyWidgets) # radioGroupButtons
+  library(shinyWidgets) # radioGroupButtons
   library(htmltools) # tagList
   library(shinycssloaders) # withSpinner
   # library(DT) # data tables
@@ -122,7 +122,7 @@ gdd_sine <- function(tmin, tmax, base, upper) {
 # Defs ----
 
 google_key <- Sys.getenv("google_places_key")
-style <- read_file("www/style.css") %>% str_replace_all("[\r\n]", " ")
+# style <- read_file("www/style.css") %>% str_replace_all("[\r\n]", " ")
 cur_yr <- year(yesterday())
 OPTS <- list(
   # map extents
@@ -144,13 +144,18 @@ OPTS <- list(
   max_cut_dates = 5,
   cut_freq_choices = seq(800, 1200, by = 100),
   cut_freq_default = 1000,
+  map_type_choices = list(
+    "Current weather" = "weather",
+    "Climate normals" = "climate",
+    "Weather vs climate" = "comparison"
+  ),
   climate_period_choices = list(
     "10-year average (2013-2023)" = "c10",
     "5-year average (2018-2023)" = "c5"),
   data_smoothing_choices = list(
-    "Daily values (no smoothing)" = 1,
-    "Weekly rolling mean" = 7,
-    "14-day rolling mean" = 14),
+    "No smoothing" = "1",
+    "Weekly average" = "7",
+    "14-day average" = "14"),
   custom_plot_elems = list(
     "Weather - Temperature" = "weather_temp",
     "Weather - GDD/day" = "weather_gdd",
@@ -183,9 +188,10 @@ OPTS <- list(
   # column defs
   cumulative_cols = c("gdd41cum", "gdd50cum"),
   percent_cols = c("frost", "freeze", "frost_by", "freeze_by"),
-  comparison_cols = c("min_temp", "max_temp", "gdd41", "gdd50"),
+  comparison_cols = c("min_temp", "max_temp", "mean_temp", "gdd41", "gdd50"),
   smoothable_weather = c("min_temp", "max_temp", "mean_temp", "gdd41", "gdd50"),
   smoothable_climate = c("min_temp", "max_temp", "mean_temp", "gdd41", "gdd50", "frost", "freeze", "frost_by", "freeze_by"),
+  smoothable_cols = c("min_temp", "max_temp", "mean_temp", "gdd41", "gdd50", "frost", "freeze", "frost_by", "freeze_by"),
   grid_cols = list(
     weather = list(
       "Mean daily temp (°F)" = "mean_temp",
@@ -268,7 +274,7 @@ smooth_climate <- function(.data, width) {
   smooth_cols(.data, OPTS$smoothable_climate, width)
 }
 smooth_cols <- function(.data, cols, width) {
-  stopifnot(is.character(cols), is.numeric(width))
+  width <- as.numeric(width)
   if (width == 1) return(.data)
   mutate(.data, across(
     all_of(cols),
