@@ -36,13 +36,12 @@ ui <- navbarPage(
     p(
       style = "color: grey; font-size: smaller; font-style: italic;",
       align = "center",
-      "Alfalfa weather tool developed by",
+      "App developed by",
       a("Ben Bradford", href = "https://entomology.wisc.edu/directory/ben-bradford/", target = "_blank", .noWS = "after"),
-      ", UW-Madison Entomology", br(),
-      paste(
-        "Last updated:", format(file.info(".")$mtime, "%Y-%m-%d")
-      ), br(),
-      a("Source code", href = "https://github.com/bzbradford/alfalfa-tool", target = "_blank")
+      ", UW-Madison Entomology",
+      br(),
+      "Last updated:", format(file.info(".")$mtime, "%Y-%m-%d."),
+      a("View source code", href = "https://github.com/bzbradford/alfalfa-tool", target = "_blank")
     )
   )
 )

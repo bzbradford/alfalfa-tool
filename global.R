@@ -152,11 +152,14 @@ OPTS <- list(
   ),
   climate_period_choices = list(
     "10-year average (2013-2023)" = "c10",
-    "5-year average (2018-2023)" = "c5"),
+    "5-year average (2018-2023)" = "c5"
+  ),
   data_smoothing_choices = list(
     "No smoothing" = "1",
     "Weekly average" = "7",
-    "14-day average" = "14"),
+    "14-day average" = "14",
+    "28-day average" = "28"
+  ),
   custom_plot_elems = list(
     "Weather - Temperature" = "weather_temp",
     "Weather - GDD/day" = "weather_gdd",
@@ -164,7 +167,8 @@ OPTS <- list(
     "Climate - Temperature" = "climate_temp",
     "Climate - GDD/day" = "climate_gdd",
     "Climate - Cumulative GDD" = "climate_gddcum",
-    "Climate - Frost/Freeze probability" = "climate_frost"),
+    "Climate - Frost/Freeze probability" = "climate_frost"
+  ),
 
   # boilerplate
   location_validation_msg = "Please select a grid cell on the map first. Use the crosshair icon on the map to automatically select your location, or enter a place name in the searchbox below the map.",

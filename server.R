@@ -37,7 +37,6 @@ server <- function(input, output, session) {
 
   # Initialize module servers ----
 
-  ## map server ----
   mapServerValues <- mapServer()
 
   observe({
@@ -49,11 +48,7 @@ server <- function(input, output, session) {
     rv$loc_ready <- TRUE
   })
 
-
-  ## plot servers ----
-  weatherPlotServer(reactive(loc_data()))
-  climatePlotServer(reactive(loc_data()))
-  customPlotServer(reactive(loc_data()))
+  plotServer(reactive(loc_data()))
   timingServer(reactive(loc_data()))
 
 
@@ -96,7 +91,7 @@ server <- function(input, output, session) {
     } else if (page == "Weather Charts") {
       tagList(
         h3("Weather charts"),
-        uiOutput("plots_ui")
+        plotUI()
       )
     } else if (page == "Timing Tool") {
       tagList(
@@ -109,20 +104,6 @@ server <- function(input, output, session) {
         uiOutput("about_ui")
       )
     }
-  })
-
-
-  ## plots_ui ----
-  output$plots_ui <- renderUI({
-    validate(need(rv$loc_ready, OPTS$location_validation_msg))
-
-    tagList(
-      tabsetPanel(
-        tabPanel("Weather plot", weatherPlotUI()),
-        tabPanel("Climate plot", climatePlotUI()),
-        tabPanel("Custom plot", customPlotUI()),
-      )
-    )
   })
 
 
