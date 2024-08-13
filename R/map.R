@@ -32,8 +32,18 @@ mapServer <- function() {
       # test observers
 
       # observe({
-      #   print(rv$grid_domain)
-      #   print(rv$grid_data)
+      #   print(grid_data())
+      # })
+
+      # observe({
+      #   print(list(
+      #     grid_data = grid_data(),
+      #     rv = list(
+      #       date_id = rv$date_id,
+      #       date_set = rv$date_set,
+      #       date_vals = rv$date_vals
+      #     )
+      #   ))
       # })
 
 
@@ -43,29 +53,21 @@ mapServer <- function() {
         selected_grid = NULL,
 
         # stores date slider state
-        date_start = NULL,
-        date_end = NULL,
-
-        # dataset for map grid
-        grid_data = NULL,
-        grid_opts = NULL,
-        grid_domain = NULL,
-        grid_pal = NULL
+        date_id = "date",
+        date_set = NULL,
+        date_vals = NULL
       )
 
 
       # SIDEBAR ----------------------------------------------------------------
 
-      # clear map state on type change
+      ## Clear map grid on type change ----
       observeEvent(input$data_type, {
         req(input$data_type)
-        rv$grid_data <- NULL
-        rv$grid_opts <- NULL
         leafletProxy("map") %>% clearGroup(layers$grid)
       })
 
-
-      ## Options UI ----
+      ## Main map options UI ----
 
       output$map_opts_ui <- renderUI({
         div(
@@ -87,7 +89,7 @@ mapServer <- function() {
         )
       })
 
-      # extended options per data type
+      ## Year/Period options UI ----
       output$type_opts_ui <- renderUI({
         type <- req(input$data_type)
 
@@ -113,42 +115,36 @@ mapServer <- function() {
         )
       })
 
+      ## Data value options UI ----
       output$value_opts_ui <- renderUI({
         type <- req(input$data_type)
+        opts <- list()
 
         if (type == "weather") {
-          choices <- OPTS$grid_cols$weather
-          radioGroupButtons(
-            ns("weather_value"), "Data value",
-            choices = choices,
-            selected = coalesce(input$weather_value, first(choices)),
-            size = "sm"
-          )
+          opts$id <- "weather_value"
+          opts$choices <- OPTS$grid_cols$weather
+          opts$selected <- input$weather_value
         } else if (type == "climate") {
-          choices <- OPTS$grid_cols$climate
-          radioGroupButtons(
-            ns("climate_value"), "Data value",
-            choices = choices,
-            selected = coalesce(input$climate_value, first(choices)),
-            size = "sm"
-          )
+          opts$id <- "climate_value"
+          opts$choices <- OPTS$grid_cols$climate
+          opts$selected <- input$climate_value
         } else if (type == "comparison") {
-          choices <- OPTS$grid_cols$comparison
-          radioGroupButtons(
-            ns("comparison_value"), "Data value",
-            choices = choices,
-            selected = coalesce(input$comparison_value, first(choices)),
-            size = "sm"
-          )
+          opts$id <- "comparison_value"
+          opts$choices <- OPTS$grid_cols$comparison
+          opts$selected <- input$comparison_value
         }
+
+        radioGroupButtons(
+          ns(opts$id), "Display value",
+          choices = opts$choices,
+          selected = coalesce(opts$selected, first(opts$choices)),
+          size = "sm"
+        )
       })
 
+      ## Smoothing options UI ----
       output$smoothing_opts_ui <- renderUI({
         type <- req(input$data_type)
-        value <- if (type == "weather") req(input$weather_value)
-        else if (type == "climate") req(input$climate_value)
-        else if (type == "comparison") req(input$comparison_value)
-        req(value %in% OPTS$smoothable_cols)
         choices <- OPTS$data_smoothing_choices
 
         radioGroupButtons(
@@ -157,6 +153,15 @@ mapServer <- function() {
           selected = coalesce(input$smoothing, first(choices)),
           size = "sm"
         )
+      })
+
+      ## Toggle smoothing buttons ----
+      observe({
+        type <- req(input$data_type)
+        value <- if (type == "weather") req(input$weather_value)
+        else if (type == "climate") req(input$climate_value)
+        else if (type == "comparison") req(input$comparison_value)
+        toggleState("smoothing", value %in% OPTS$smoothable_cols)
       })
 
 
@@ -190,21 +195,28 @@ mapServer <- function() {
         }
 
         opts$min <- start_of_year(i$year)
-        opts$value <- min(
-          align_dates(coalesce(rv$date_end, yesterday()), i$year),
-          opts$max
-        )
 
         # enable double-ended slider for cumulative gdd
+        # if set_dates is defined, use those values
+        # otherwise use existing or defaults
+        set_dates <- rv$date_set
         if (i$value %in% OPTS$cumulative_cols) {
-          opts$value <- c(
-            align_dates(coalesce(rv$date_start, opts$min), i$year),
-            opts$value
+          opts$id <- "date2"
+          opts$value <- align_dates(c(
+            coalesce(set_dates$start, input$date2[1], opts$min),
+            coalesce(set_dates$end, input$date2[2], input$date, yesterday())
+          ), i$year)
+        } else {
+          opts$id <- "date"
+          opts$value <- align_dates(
+            coalesce(set_dates$end, input$date, input$date2[2], yesterday()),
+            i$year
           )
         }
 
+        rv$date_id <- opts$id
         sliderInput(
-          ns("date_slider"), "Date",
+          ns(opts$id), "Date",
           min = opts$min, max = opts$max,
           value = opts$value,
           timeFormat = opts$fmt
@@ -213,21 +225,21 @@ mapServer <- function() {
 
       # store date slider values in rv
       observe({
-        dt <- req(input$date_slider)
+        dt <- req(input[[req(rv$date_id)]])
+        prev <- rv$date_vals
+        dates <- list(start = NULL, end = NULL)
 
         if (length(dt) == 2) {
-          rv$date_start <- dt[1]
-          rv$date_end <- dt[2]
+          dates$start <- dt[1]
+          dates$end <- dt[2]
         } else {
-          rv$date_end <- dt
-          rv$date_start <-
-            start_date <- isolate(rv$date_start)
-            if (is.null(start_date)) {
-              start_of_year(dt)
-            } else {
-              start_of_year(dt) + yday(start_date) - 1
-            }
+          dates$end <- dt
+          start_adjust <- ifelse(is.null(prev$start), 0, yday(prev$start) - 1)
+          dates$start <- start_of_year(dt) + start_adjust
         }
+
+        rv$date_set <- NULL
+        rv$date_vals <- dates
       })
 
 
@@ -247,19 +259,22 @@ mapServer <- function() {
       })
 
       move_date <- function(step) {
-        cur_date <- as_date(rv$date_end)
+        prev_dates <- rv$date_vals
+        cur_date <- as_date(prev_dates$end)
         new_end_date <- clamp(
           cur_date + step,
           start_of_year(cur_date),
           end_of_year(cur_date)
         )
         new_start_date <- clamp(
-          as.Date(rv$date_start),
+          as.Date(prev_dates$start),
           start_of_year(cur_date),
           new_end_date
         )
-        rv$date_end <- new_end_date
-        rv$date_start <- new_start_date
+        rv$date_set <- list(
+          start = new_start_date,
+          end = new_end_date
+        )
       }
 
       observeEvent(input$date_earlier_7, move_date(-7))
@@ -267,8 +282,10 @@ mapServer <- function() {
       observeEvent(input$date_later_1, move_date(1))
       observeEvent(input$date_later_7, move_date(7))
       observeEvent(input$date_reset, {
-        rv$date_start <- start_of_year()
-        rv$date_end <- yesterday()
+        rv$date_set <- list(
+          start = start_of_year(),
+          end = yesterday()
+        )
       })
 
 
@@ -291,8 +308,8 @@ mapServer <- function() {
         opts <- list()
         if (isTRUE(input$legend_autoscale)) {
           opts$style <- "display:none;"
-          opts$min <- rv$grid_domain[1]
-          opts$max <- rv$grid_domain[2]
+          opts$min <- grid_pal()$domain[1]
+          opts$max <- grid_pal()$domain[2]
         } else {
           opts$style <- "display:inline-flex; gap:10px;"
           opts$min <- input$legend_min
@@ -302,17 +319,15 @@ mapServer <- function() {
         div(
           style = opts$style,
           numericInput(
-            inputId = ns("legend_min"),
-            label = "Gradient minimum",
-            step = .1,
+            ns("legend_min"), "Gradient minimum",
             value = opts$min,
+            step = .1,
             width = "150px"
           ),
           numericInput(
-            inputId = ns("legend_max"),
-            label = "Gradient maximum",
-            step = .1,
+            ns("legend_max"), "Gradient maximum",
             value = opts$max,
+            step = .1,
             width = "150px"
           )
         )
@@ -346,7 +361,7 @@ mapServer <- function() {
       ## Map title ----
 
       output$map_title <- renderUI({
-        opts <- req(rv$grid_opts)
+        opts <- grid_data()$opts
         cols <- OPTS$grid_cols[[opts$type]]
         title <- setNames(names(cols), cols)[[opts$col]]
         if (opts$smoothing != 1) {
@@ -441,23 +456,18 @@ mapServer <- function() {
       # handle filtering by date for weather data
       prepare_weather_grid_data <- function(df, col, dt, smoothing) {
         df <- df %>% select(all_of(c("lat", "lng", "date", "value" = col)))
-
         df1 <- if (smoothing > 1 & (col %in% OPTS$smoothable_cols)) {
           df %>%
             filter(between(date, dt[1] - smoothing / 2, dt[1] + smoothing / 2)) %>%
             summarize(value = mean(value), .by = c(lat, lng))
-        } else {
-          df %>% filter(date == dt[1])
-        }
-        df2 <- if (length(dt) == 2) df %>% filter(date == dt[2])
-
+        } else filter(df, date == dt[1])
+        df2 <- if (length(dt) == 2) filter(df, date == dt[2])
         prepare_grid_data(df1, df2, col)
       }
 
       # handle filtering by day of year for climate data
       prepare_climate_grid_data <- function(df, col, dt, smoothing) {
         df <- df %>% select(all_of(c("lat", "lng", "yday", "value" = col)))
-
         df1 <- if (smoothing > 1) {
           df %>%
             filter(between(yday, yday(dt[1] - smoothing / 2), yday(dt[1] + smoothing / 2))) %>%
@@ -508,12 +518,17 @@ mapServer <- function() {
         )
       }
 
-      ## Generate grid data ----
-      observe({
+      # create the palette domain
+      create_domain <- function(min_val, max_val) {
+        signif(c(min_val, max_val), 3)
+      }
+
+      ## Set grid data and opts ----
+      grid_data <- reactive({
         opts <- list()
         opts$type <- req(input$data_type)
         opts$smoothing <- req(input$smoothing) %>% as.numeric()
-        opts$date <- req(input$date_slider)
+        opts$date <- req(input[[req(rv$date_id)]])
 
         # set grid data
         grid <-
@@ -540,23 +555,14 @@ mapServer <- function() {
               mutate(value = wx_value - cl_value)
           }
 
-        rv$grid_data <- grid
-        rv$grid_opts <- opts
-        rv$grid_pal <- NULL
+        list(grid = grid, opts = opts)
       })
 
 
-      ## Create grid color palette ----
-
-      # create the palette domain
-      create_domain <- function(min_val, max_val) {
-        signif(c(min_val, max_val), 3)
-      }
-
-      # color palette function for displaying grid
-      observe({
-        grid <- req(rv$grid_data)
-        opts <- req(rv$grid_opts)
+      ## Set grid domain and palette ----
+      grid_pal <- reactive({
+        grid <- grid_data()$grid
+        opts <- grid_data()$opts
         opts$autoscale <- isTRUE(input$legend_autoscale)
 
         # percent frost/freeze palette
@@ -580,25 +586,31 @@ mapServer <- function() {
           )
         }
 
-        rv$grid_domain <- opts$domain
-        rv$grid_pal <- colorNumeric(opts$colors, opts$domain, reverse = T)
-        # message("palette refreshed at ", Sys.time() - init_time)
+        list(
+          domain = opts$domain,
+          pal = colorNumeric(opts$colors, opts$domain, reverse = T)
+        )
       })
 
 
       ## Draw grid on map ----
-
       observe({
-        opts <- list()
-        grid <- req(rv$grid_data)
-        opts$opts <- req(rv$grid_opts)
-        opts$pal <- req(rv$grid_pal)
-        opts$domain <- req(rv$grid_domain)
+        grid <- grid_data()$grid
+        opts <- grid_data()$opts
+        opts$pal <- grid_pal()$pal
+        opts$domain <- grid_pal()$domain
+
+        # make sure date slider has updated
+        if (opts$col %in% OPTS$cumulative_cols) {
+          req(length(opts$date) == 2)
+        } else {
+          req(length(opts$date) == 1)
+        }
 
         grid <- grid %>%
           mutate(pal_value = mapply(clamp, value, opts$domain[1], opts$domain[2])) %>%
           mutate(fill = opts$pal(pal_value)) %>%
-          set_grid_labels(opts$opts)
+          set_grid_labels(opts)
 
         leafletProxy(ns("map")) %>%
           addRectangles(
@@ -665,13 +677,15 @@ mapServer <- function() {
 
         if (is.null(rv$selected_grid)) {
           map %>% removeShape("selected_grid")
-          return()
+          req(F)
         }
 
         loc <- req(rv$selected_grid)
-        grid <- req(rv$grid_data) %>%
+        opts <- grid_data()$opts
+        grid <- grid_data()$grid %>%
           filter(lat == loc$lat, lng == loc$lng) %>%
-          set_grid_labels(rv$grid_opts, selected = T)
+          set_grid_labels(opts, selected = T)
+
         map %>%
           removeShape("selected_grid") %>%
           addRectangles(

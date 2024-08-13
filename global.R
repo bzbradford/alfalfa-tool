@@ -136,7 +136,8 @@ OPTS <- list(
 
   # interface settings
   weather_years = c(cur_yr, cur_yr - 1),
-  weather_date_fmt = "%b %-d, %Y",
+  # weather_date_fmt = "%b %-d, %Y",
+  weather_date_fmt = "%b %-d",
   climate_date_fmt = "%b %-d",
   weather_date_max = NULL, # set in server
   climate_date_min = NULL, # set in server
