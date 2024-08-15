@@ -154,11 +154,26 @@ OPTS <- list(
     "10-year average (2013-2023)" = "c10",
     "5-year average (2018-2023)" = "c5"
   ),
+  plot_period_prefix = list(
+    "c10" = "10-year average (2013-2023)",
+    "c5" = "5-year average (2018-2023)"
+  ),
+  climate_frost_choices = list(
+    "Frost (<32°F)" = "frost",
+    "Hard freeze (<28°F)" = "freeze",
+    "Killing freeze (<24°F)" = "kill"
+  ),
   data_smoothing_choices = list(
     "No smoothing" = "1",
-    "Weekly average" = "7",
+    "7-day average" = "7",
     "14-day average" = "14",
     "28-day average" = "28"
+  ),
+  plot_smoothing_prefix = list(
+    "1" = "Daily",
+    "7" = "7-day average",
+    "14" = "14-day average",
+    "28" = "28-day average"
   ),
   custom_plot_elems = list(
     "Weather - Temperature" = "weather_temp",
@@ -167,7 +182,7 @@ OPTS <- list(
     "Climate - Temperature" = "climate_temp",
     "Climate - GDD/day" = "climate_gdd",
     "Climate - Cumulative GDD" = "climate_gddcum",
-    "Climate - Frost/Freeze probability" = "climate_frost"
+    "Climate - Frost/freeze/kill prob." = "climate_frost"
   ),
 
   # boilerplate
@@ -189,33 +204,49 @@ OPTS <- list(
     xanchor = "center",
     x = .5, y = -.15),
   plot_line_width = 1.5,
+  plot_colors = list(
+    min_temp = "cornflowerblue",
+    mean_temp = "orange",
+    max_temp = "red",
+    frost = "orchid",
+    freeze = "purple",
+    kill = "darkslateblue",
+    gdd41 = "green",
+    gdd50 = "peru",
+    gdd41cum = "olivedrab",
+    gdd50cum = "chocolate"
+  ),
 
   # column defs
   cumulative_cols = c("gdd41cum", "gdd50cum"),
-  percent_cols = c("frost", "freeze", "frost_by", "freeze_by"),
+  percent_cols = c("frost", "freeze", "kill", "frost_by", "freeze_by", "kill_by"),
   comparison_cols = c("min_temp", "max_temp", "mean_temp", "gdd41", "gdd50"),
-  smoothable_cols = c("min_temp", "max_temp", "mean_temp", "gdd41", "gdd50", "frost", "freeze", "frost_by", "freeze_by"),
+  smoothable_cols = c("min_temp", "max_temp", "mean_temp", "gdd41", "gdd50", "frost", "freeze", "kill", "frost_by", "freeze_by", "kill_by"),
   grid_cols = list(
     weather = list(
-      "Mean daily temp (°F)" = "mean_temp",
-      "Min daily temp (°F)" = "min_temp",
-      "Max daily temp (°F)" = "max_temp",
+      "Mean temperature (°F)" = "mean_temp",
+      "Min temperature (°F)" = "min_temp",
+      "Max temperature (°F)" = "max_temp",
       "Daily GDD41 accumulation" = "gdd41",
       "Daily GDD50 accumulation" = "gdd50",
       "Cumulative GDD41" = "gdd41cum",
-      "Cumulative GDD50" = "gdd50cum"),
+      "Cumulative GDD50" = "gdd50cum"
+    ),
     climate = list(
-      "Mean daily temp (°F)" = "mean_temp",
-      "Min daily temp (°F)" = "min_temp",
-      "Max daily temp (°F)" = "max_temp",
+      "Mean temperature (°F)" = "mean_temp",
+      "Min temperature (°F)" = "min_temp",
+      "Max temperature (°F)" = "max_temp",
       "Mean daily GDD41" = "gdd41",
       "Mean daily GDD50" = "gdd50",
-      "Mean cumulative GDD41" = "gdd41cum",
-      "Mean cumulative GDD50" = "gdd50cum",
-      "Mean probability of frost on day" = "frost",
-      "Mean probability of hard freeze on day" = "freeze",
-      "Cumulative probability of frost" = "frost_by",
-      "Cumulative probability of hard freeze" = "freeze_by"),
+      "Mean cumul. GDD41" = "gdd41cum",
+      "Mean cumul. GDD50" = "gdd50cum",
+      "Prob. of frost (<32°F) on day" = "frost",
+      "Prob. of hard freeze (<28°F) on day" = "freeze",
+      "Prob. of killing freeze (<24°F) on day" = "kill",
+      "Cumul. prob. of frost" = "frost_by",
+      "Cumul. prob. of hard freeze" = "freeze_by",
+      "Cumul. prob. of killing freeze" = "kill_by"
+    ),
     comparison = list(
       "Mean daily temp vs climate average (°F)" = "mean_temp",
       "Min daily temp vs climate average (°F)" = "min_temp",
@@ -223,7 +254,9 @@ OPTS <- list(
       "Daily GDD41 vs climate average" = "gdd41",
       "Daily GDD50 vs climate average" = "gdd50",
       "Cumul. GDD41 vs climate average" = "gdd41cum",
-      "Cumul. GDD50 vs climate average" = "gdd50cum"))
+      "Cumul. GDD50 vs climate average" = "gdd50cum"
+    )
+  )
 )
 
 
@@ -297,7 +330,7 @@ smooth_cols <- function(.data, width, cols = OPTS$smoothable_cols) {
 }
 
 remove_weather_cols <- function(.data) {
-  drop_cols <- c("year", "yday", "mean_temp", "frost", "freeze", "gdd41cum", "gdd50cum")
+  drop_cols <- c("year", "yday", "mean_temp", "frost", "freeze", "kill", "gdd41cum", "gdd50cum")
   .data %>% select(-all_of(drop_cols))
 }
 
@@ -309,7 +342,8 @@ add_weather_cols <- function(.data) {
       yday = yday(date),
       mean_temp = rowMeans(pick(min_temp, max_temp)),
       frost = min_temp <= 32,
-      freeze = min_temp <= 28
+      freeze = min_temp <= 28,
+      kill = min_temp <= 24
     ) %>%
     mutate(
       gdd41cum = cumsum(gdd41),

@@ -12,6 +12,11 @@ timingServer <- function(loc_data) {
       ns <- session$ns
 
       rv <- reactiveValues(
+        loc = NULL,
+        loc_ready = FALSE,
+        weather = NULL,
+        c10 = NULL,
+        c5 = NULL,
         initial_cut_dates = NULL,
         set_cut_dates = NULL
       )
@@ -22,6 +27,11 @@ timingServer <- function(loc_data) {
         rv$weather <- loc_data()$weather
         rv$c10 <- loc_data()$c10
         rv$c5 <- loc_data()$c5
+      })
+
+      # hide UI until a location is selected
+      observe({
+        if (!is.null(rv$loc)) rv$loc_ready <- TRUE
       })
 
       # determine initial cut timing based on climate average
@@ -43,7 +53,7 @@ timingServer <- function(loc_data) {
       ## Main UI ----
 
       output$main_ui <- renderUI({
-        validate(need(rv$loc, OPTS$location_validation_msg))
+        validate(need(rv$loc_ready, OPTS$location_validation_msg))
 
         tagList(
           uiOutput(ns("options_ui")),
@@ -235,7 +245,7 @@ timingServer <- function(loc_data) {
           select(yday, gdd41) %>%
           mutate(date = start_of_year(opts$year) + yday - 1)
         cl_risk <- cl %>%
-          select(yday, freeze_by)
+          select(yday, kill_by)
         bind_rows(wx, cl_gdd) %>%
           left_join(cl_risk, join_by(yday)) %>%
           mutate(cutting = cut(yday, cut_points)) %>%
@@ -246,6 +256,8 @@ timingServer <- function(loc_data) {
             .by = cutting
           )
       })
+
+      observe(print(plot_data()))
 
 
       ## Render plot ----
@@ -299,8 +311,8 @@ timingServer <- function(loc_data) {
             yaxis = "y1"
           ) %>%
           add_trace(
-            name = "Cumul. hard freeze probability",
-            x = ~date, y = ~freeze_by*100,
+            name = "Cumul. killing freeze prob.",
+            x = ~date, y = ~kill_by*100,
             type = "scatter", mode = "lines",
             hovertemplate = "%{y:.1f}%",
             line = list(
@@ -312,9 +324,9 @@ timingServer <- function(loc_data) {
           layout(
             legend = OPTS$plot_legend,
             xaxis = OPTS$plot_date_axis_weather,
-            yaxis = list(title = "Growing degree days (base 41F)"),
+            yaxis = list(title = "Growing degree days (base 41°F)"),
             yaxis2 = list(
-              title = "Cumulative hard freeze probability",
+              title = "Cumul. killing freeze probability (<24°F)",
               overlaying = "y",
               side = "right",
               zeroline = F,

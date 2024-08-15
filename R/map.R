@@ -72,11 +72,7 @@ mapServer <- function() {
       output$map_opts_ui <- renderUI({
         div(
           class = "well",
-          radioGroupButtons(
-            ns("data_type"), "Choose data layer",
-            choices = OPTS$map_type_choices,
-            size = "sm"
-          ),
+          uiOutput(ns("type_ui")),
           uiOutput(ns("type_opts_ui")),
           uiOutput(ns("value_opts_ui")),
           uiOutput(ns("smoothing_opts_ui")),
@@ -86,6 +82,17 @@ mapServer <- function() {
             uiOutput(ns("date_btns_ui")),
           ),
           uiOutput(ns("display_opts_ui"))
+        )
+      })
+
+      ## data type UI ----
+      output$type_ui <- renderUI({
+        choices <- OPTS$map_type_choices
+        radioGroupButtons(
+          ns("data_type"), "Choose data layer",
+          choices = choices,
+          selected = coalesce(input$data_type, first(choices)),
+          size = "sm"
         )
       })
 

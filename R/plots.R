@@ -11,17 +11,24 @@ plotServer <- function(loc_data) {
     function(input, output, session) {
       ns <- session$ns
 
-      rv <- reactiveValues()
+      rv <- reactiveValues(
+        loc = NULL,
+        loc_ready = FALSE
+      )
 
       observe({
         rv$loc <- loc_data()$loc
+      })
+
+      observe({
+        if (!is.null(rv$loc)) rv$loc_ready <- TRUE
       })
 
 
       # Main UI ----
 
       output$main_ui <- renderUI({
-        validate(need(rv$loc, OPTS$location_validation_msg))
+        validate(need(rv$loc_ready, OPTS$location_validation_msg))
 
         tagList(
           tabsetPanel(
@@ -74,25 +81,22 @@ plotServer <- function(loc_data) {
       output$weather_plot_title <- renderUI({
         loc <- loc_data()$loc
         smoothing <- req(input$weather_smoothing)
-
-        title <- case_match(
-          smoothing,
-          "1" ~ "Weather data",
-          "7" ~ "7-day average weather data",
-          "14" ~ "14-day average air temperature data"
-        ) %>%
-          paste(sprintf("for %.1f°N, %.1f°W", loc$lat, loc$lng))
-
-        h4(title, style = "text-align: center;")
+        loc_text <- sprintf("for %.1f°N, %.1f°W", loc$lat, loc$lng)
+        prefix <- OPTS$plot_smoothing_prefix
+        h4(
+          style = "text-align: center;",
+          paste(prefix[[smoothing]], "weather", loc_text)
+        )
       })
 
       ## weather_plot ----
       output$weather_plot <- renderPlotly({
-        opts <- list()
-        opts$loc <- loc_data()$loc
-        opts$year <- req(input$weather_year)
-        opts$smoothing <- req(input$weather_smoothing) %>% as.numeric()
-        opts$gdd_type <- req(input$weather_gdd)
+        opts <- list(
+          loc = loc_data()$loc,
+          year = req(input$weather_year),
+          smoothing = req(input$weather_smoothing),
+          gdd_type = req(input$weather_gdd)
+        )
         df <- loc_data()$weather
 
         if (opts$year != "All") df <- filter(df, year == opts$year)
@@ -106,15 +110,12 @@ plotServer <- function(loc_data) {
           ) %>%
           add_temp_traces(df, "y1")
 
-        if (opts$gdd_type == "Cumulative") {
+        if (opts$gdd_type == "Cumulative")
           plt <- add_gdd_cum_traces(plt, df, "y2")
-        } else if (opts$gdd_type == "Daily") {
+        else if (opts$gdd_type == "Daily")
           plt <- add_gdd_daily_traces(plt, df, "y2")
-        }
 
-        if (opts$year != cur_yr - 1) {
-          plt <- plt %>% add_today()
-        }
+        if (opts$year != cur_yr - 1) plt <- plt %>% add_today()
 
         plt
       })
@@ -138,6 +139,11 @@ plotServer <- function(loc_data) {
                   inline = TRUE
                 ),
                 radioButtons(
+                  ns("climate_frost"), "Frost threshold",
+                  choices = OPTS$climate_frost_choices,
+                  inline = TRUE
+                ),
+                radioButtons(
                   ns("climate_smoothing"), "Data smoothing options",
                   choices = OPTS$data_smoothing_choices,
                   selected = 7,
@@ -158,42 +164,47 @@ plotServer <- function(loc_data) {
       output$climate_plot_title <- renderUI({
         loc <- loc_data()$loc
         period <- req(input$climate_period)
-        smoothing <- req(input$climate_smoothing) %>% as.numeric()
+        smoothing <- req(input$climate_smoothing)
 
-        title <- case_match(
-          smoothing,
-          1 ~ "Daily average",
-          7 ~ "7-day average",
-          14 ~ "14-day average"
-        ) %>% paste(case_match(
-          period,
-          "c10" ~ "10-year climate data (2013-2023)",
-          "c5" ~ "5-year climate data (2018-2023)"
-        )) %>%
-          paste(sprintf("for %.1f°N, %.1f°W", loc$lat, loc$lng))
+        loc_text <- sprintf("for %.1f°N, %.1f°W", loc$lat, loc$lng)
+        period_text <- OPTS$plot_period_prefix[[period]]
+        smoothing_text <- OPTS$plot_smoothing_prefix[[smoothing]]
 
-        h4(title, style = "text-align: center;")
+        h4(
+          style = "text-align: center;",
+          paste(smoothing_text, period_text, loc_text)
+        )
       })
 
       ## climate_plot ----
       output$climate_plot <- renderPlotly({
         loc <- loc_data()$loc
-        period <- req(input$climate_period)
-        smoothing <- req(input$climate_smoothing) %>% as.numeric()
+        opts <- list(
+          period = req(input$climate_period),
+          frost = req(input$climate_frost),
+          smoothing = req(input$climate_smoothing) %>% as.numeric()
+        )
 
-        df <- loc_data()[[period]] %>%
-          smooth_cols(smoothing) %>%
+        df <- loc_data()[[opts$period]] %>%
+          smooth_cols(opts$smoothing) %>%
           mutate(date = start_of_year() + yday - 1)
 
-        plot_ly() %>%
+        plt <- plot_ly() %>%
           layout(
             legend = OPTS$plot_legend,
             xaxis = OPTS$plot_date_axis_climate,
             hovermode = "x unified"
           ) %>%
           add_today() %>%
-          add_temp_traces(df, "y1") %>%
-          add_frost_traces(df, "y2")
+          add_temp_traces(df, "y1")
+
+        if (opts$frost == "frost") {
+          plt %>% add_frost_traces(df, "y2")
+        } else if (opts$frost == "freeze") {
+          plt %>% add_freeze_traces(df, "y2")
+        } else if (opts$frost == "kill") {
+          plt %>% add_kill_traces(df, "y2")
+        }
       })
 
 
@@ -370,7 +381,7 @@ plotServer <- function(loc_data) {
             } else if (opts$traces == "gddcum") {
               add_gdd_cum_traces(plt, df, axis, opts$label, opts$dash)
             } else if (opts$traces == "frost") {
-              add_frost_traces(plt, df, axis)
+              add_frost_freeze_kill_traces(plt, df, axis)
             } else {
               plt
             }
