@@ -93,9 +93,9 @@ server <- function(input, output, session) {
         h3("Weather charts"),
         plotUI()
       )
-    } else if (page == "Timing Tool") {
+    } else if (page == "Cut Scheduling") {
       tagList(
-        h3("Alfalfa cut timing tools"),
+        h3("Alfalfa cut scheduling tool"),
         timingUI()
       )
     } else if (page == "About") {

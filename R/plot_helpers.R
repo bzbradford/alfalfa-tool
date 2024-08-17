@@ -24,8 +24,8 @@ rect <- function(ymin, ymax, color = "red") {
   )
 }
 
-add_today <- function(plt, yr = cur_yr, other_shapes = list()) {
-  x <- yesterday() + 1
+add_today <- function(plt, yr = cur_yr, date_yr = cur_yr, other_shapes = list()) {
+  x <- align_dates(yesterday() + 1, date_yr)
   text <- if (yr == cur_yr) "Today" else format(x, "%b %d")
   vline <- list(list(
     type = "line", yref = "y domain",

@@ -27,7 +27,7 @@ ui <- navbarPage(
   ),
   tabPanel("Weather Map", icon = icon("map")),
   tabPanel("Weather Charts", icon = icon("chart-line")),
-  tabPanel("Timing Tool", icon = icon("tractor")),
+  tabPanel("Cut Scheduling", icon = icon("tractor")),
   tabPanel("About", icon = icon("question")),
   footer = tags$footer(
     id = "footer-content",

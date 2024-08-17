@@ -1,7 +1,6 @@
 
 timingUI <- function() {
   ns <- NS("timing")
-
   uiOutput(ns("main_ui"))
 }
 
@@ -11,6 +10,8 @@ timingServer <- function(loc_data) {
     function(input, output, session) {
       ns <- session$ns
 
+      # Reactives ----
+
       rv <- reactiveValues(
         loc = NULL,
         loc_ready = FALSE,
@@ -18,7 +19,8 @@ timingServer <- function(loc_data) {
         c10 = NULL,
         c5 = NULL,
         initial_cut_dates = NULL,
-        set_cut_dates = NULL
+        set_cut_dates = NULL,
+        date_ui_ready = FALSE
       )
 
       # store incoming location data in rv
@@ -34,18 +36,59 @@ timingServer <- function(loc_data) {
         if (!is.null(rv$loc)) rv$loc_ready <- TRUE
       })
 
-      # determine initial cut timing based on climate average
+      # determine initial cut timing based on gdd accumulation
       schedule_cut_dates <- function() {
-        cl <- rv[[req(input$period)]]
+        df <- weather_data()
         freq <- as.numeric(req(input$cut_freq))
-        col <- "gdd41cum"
-        cuts <- seq(freq, 4500, by = freq)
+        cuts <- seq(freq, max(df$gdd_since_kill), by = freq)
         days <- sapply(cuts, function(gdd) {
-          cl[which.min(abs(gdd - cl[[col]])),]$yday
+          df[which.min(abs(gdd - df$gdd_since_kill)),]$yday
         })
         days <- days[between(days, 60, 300)]
-        start_of_year() + unique(days) - 1
+        pause_date_reader()
+        rv$initial_cut_dates <- start_of_year() + unique(days) - 1
       }
+
+      ## Observed/projected data ----
+
+      weather_data <- reactive({
+        opts <- list(
+          year = req(input$year),
+          period = req(input$period)
+        )
+        wx <- req(rv$weather) %>%
+          filter(year == opts$year) %>%
+          select(date, yday, gdd41, kill) %>%
+          mutate(last_kill = if_else(kill, yday, NA)) %>%
+          fill(last_kill)
+        cl <- req(rv[[opts$period]])
+        cl_gdd <- cl %>%
+          filter(yday > max(wx$yday)) %>%
+          select(yday, gdd41) %>%
+          mutate(date = start_of_year(opts$year) + yday - 1)
+        cl_risk <- cl %>% select(yday, kill_by)
+        bind_rows(wx, cl_gdd) %>%
+          left_join(cl_risk, join_by(yday)) %>%
+          fill(last_kill) %>%
+          mutate(gdd41cum = cumsum(gdd41)) %>%
+          mutate(gdd_since_kill = cumsum(gdd41), .by = last_kill)
+      })
+
+      ## Plot data ----
+      observe({
+        cut_dates <- req(rv$set_cut_dates)
+        req(identical(cut_dates, sort(unique(cut_dates))))
+        cut_days <- yday(cut_dates)
+        cut_points <- c(-1, cut_days, 999)
+        df <- weather_data() %>%
+          mutate(cutting = cut(yday, cut_points)) %>%
+          mutate(
+            days_since_cut = row_number() - 1,
+            gdd_since_cut = cumsum(gdd41),
+            .by = c(last_kill, cutting)
+          )
+        rv$plot_data <- df
+      })
 
 
       # Interface ----
@@ -57,7 +100,7 @@ timingServer <- function(loc_data) {
 
         tagList(
           uiOutput(ns("options_ui")),
-          h4("Growing degree days and frost probability", align = "center"),
+          h4("Full-season alfalfa cut and kill schedule", align = "center"),
           uiOutput(ns("plot_title")),
           plotlyOutput(ns("plot"), height = "500px"),
           div(class = "plot-caption", HTML("Today's date is indicated as a vertical dashed line. Future degree-day accumulation estimated based on climate average GDD/day. Weather data originally sourced from NOAA and retrieved from <a href='https://agweather.cals.wisc.edu'>AgWeather</a>, climate data sourced from <a href='https://www.climatologylab.org/gridmet.html'>GridMET</a>. Green zone represents optimal cut timing (900-1100 GDD since last cutting), blue zone (0-360 GDD) represents maximum grow-back since last cut and before first freeze. Ideally alfalfa should not be allowed to grow outside of this zone after the last fall cutting."))
@@ -70,17 +113,20 @@ timingServer <- function(loc_data) {
       output$options_ui <- renderUI({
         div(
           class = "well",
-          div(
-            class = "inline-flex",
-            radioButtons(
-              ns("year"), "Year",
-              choices = OPTS$weather_years,
+          fluidRow(
+            column(6,
+              div(class = "inline-flex",
+                radioButtons(
+                  ns("year"), "Year",
+                  choices = OPTS$weather_years
+                ),
+                radioButtons(
+                  ns("period"), "Climate data",
+                  choices = OPTS$climate_period_choices
+                )
+              )
             ),
-            radioButtons(
-              ns("period"), "Climate period",
-              choices = OPTS$climate_period_choices
-            ),
-            uiOutput(ns("auto_cut_ui"))
+            column(6, uiOutput(ns("auto_cut_ui")))
           ),
           div(
             tags$label("Cutting dates"),
@@ -94,9 +140,7 @@ timingServer <- function(loc_data) {
 
       output$auto_cut_ui <- renderUI({
         div(
-          div(
-            tags$label("Schedule cuts by cumulative GDD"),
-          ),
+          div(tags$label("Schedule cuts by cumulative GDD")),
           div(
             style = "display: inline-flex; gap: 20px;",
             selectInput(
@@ -110,9 +154,12 @@ timingServer <- function(loc_data) {
         )
       })
 
-      observeEvent(input$apply_cut_freq, {
-        # this forces the date UI to use the scheduler to find initial dates
-        rv$initial_cut_dates <- NULL
+      # handle 'apply' button
+      observeEvent(input$apply_cut_freq, schedule_cut_dates())
+
+      # auto schedule when no dates are set
+      observe({
+        if (is.null(rv$initial_cut_dates)) schedule_cut_dates()
       })
 
 
@@ -122,48 +169,36 @@ timingServer <- function(loc_data) {
       remove_cut_date_id <- function(i) paste0("remove_cut_date-", i)
 
       output$cut_dates_ui <- renderUI({
-        if (is.null(rv$initial_cut_dates)) {
-          rv$initial_cut_dates <- schedule_cut_dates()
-          return()
-        }
-
-        opts <- list()
-        opts$year <- req(input$year)
-        opts$cut_dates <- req(rv$initial_cut_dates)
-        min_date <- start_of_year(opts$year)
-        max_date <- end_of_year(opts$year)
-        cut_dates <- min_date + sort(unique(yday(opts$cut_dates))) - 1
+        yr <- req(input$year)
+        cut_dates <- req(rv$initial_cut_dates)
+        min_date <- start_of_year(yr)
+        max_date <- end_of_year(yr)
+        cut_dates <- min_date + sort(unique(yday(cut_dates))) - 1
         n_dates <- length(cut_dates)
         inputs <- list()
 
         for (i in 1:n_dates) {
           id <- cut_date_id(i)
-          inputs[[id]] <- div(
-            dateInput(
-              inputId = ns(id),
-              label = NULL,
-              min = min_date,
-              max = max_date,
-              value = clamp(cut_dates[i], min_date, max_date),
-              format = "M d",
-              width = "100px"
-            ), {
-              # add remove link only if >1 date inputs
-              if (n_dates > 1) {
-                div(
-                  style = "text-align: center",
-                  actionLink(ns(remove_cut_date_id(i)), "Remove")
-                )
-              }
-            }
+          elems <- list()
+          elems$input <- dateInput(
+            inputId = ns(id), label = NULL,
+            min = min_date, max = max_date,
+            value = clamp(cut_dates[i], min_date, max_date),
+            format = "M d", width = "100px"
           )
+          if (n_dates > 1) {
+            elems$remove <- div(
+              style = "text-align: center",
+              actionLink(ns(remove_cut_date_id(i)), "Remove")
+            )
+          }
+          inputs[[id]] <- div(elems)
         }
 
         btn <- function(id) {
           actionButton(
             ns(id), icon("plus"),
-            class = "btn-sm",
-            style = "height: 45px;",
+            class = "btn-sm", style = "height: 45px;",
             disabled = length(inputs) == OPTS$max_cut_dates
           )
         }
@@ -172,20 +207,35 @@ timingServer <- function(loc_data) {
           class = "inline-flex",
           btn("add_cut_before"),
           inputs,
-          btn("add_cut_after")
+          btn("add_cut_after"),
+          HTML("<script>Shiny.setInputValue('timing-date_ui_ready', true);</script>")
         )
       })
 
 
       ## Read and store cutting dates ----
 
+      pause_date_reader <- function() {
+        rv$date_ui_ready <- FALSE
+        runjs("Shiny.setInputValue('timing-date_ui_ready', false);")
+      }
+
       observe({
-        dates <- req(rv$initial_cut_dates)
-        dates <- sapply(1:length(dates), function(i) {
-          id <- cut_date_id(i)
-          req(input[[id]])
-        })
-        rv$set_cut_dates <- as.Date(dates)
+        rv$date_ui_ready <- req(input$date_ui_ready)
+      })
+
+      observe({
+        req(rv$date_ui_ready)
+        n_dates <- length(req(rv$initial_cut_dates))
+        dates <- sapply(1:n_dates, function(i) {
+          req(input[[cut_date_id(i)]])
+        }) %>% as.Date()
+        if (!identical(dates, sort(dates))) {
+          pause_date_reader()
+          rv$initial_cut_dates <- dates
+        } else {
+          rv$set_cut_dates <- dates
+        }
       })
 
 
@@ -197,8 +247,8 @@ timingServer <- function(loc_data) {
         dates <- req(rv$set_cut_dates)
         new_date <- max(start_of_year(yr), as.Date(first(dates)) - 28)
         new_dates <- unique(c(new_date, dates))
+        pause_date_reader()
         rv$initial_cut_dates <- new_dates
-        rv$set_cut_dates <- NULL
       })
 
       # add another date halfway to Dec 31
@@ -207,8 +257,8 @@ timingServer <- function(loc_data) {
         dates <- req(rv$set_cut_dates)
         new_date <- min(as.Date(last(dates)) + 28, end_of_year(yr))
         new_dates <- unique(c(dates, new_date))
+        pause_date_reader()
         rv$initial_cut_dates <- new_dates
-        rv$set_cut_dates <- NULL
       })
 
       # handle date removal
@@ -217,120 +267,116 @@ timingServer <- function(loc_data) {
         observeEvent(input[[id]], {
           dates <- req(rv$set_cut_dates)
           dates <- dates[-i]
+          pause_date_reader()
           rv$initial_cut_dates <- dates
-          rv$set_cut_dates <- NULL
         })
       })
 
 
       # Plot ----
 
-      ## Generate plot data ----
-
-      plot_data <- reactive({
+      output$plot <- renderPlotly({
         opts <- list()
         opts$year <- req(input$year)
-        opts$period <- req(input$period)
-        opts$dates <- req(rv$set_cut_dates)
-        req(identical(opts$dates, sort(unique(opts$dates))))
-        opts$days <- yday(opts$dates)
-
-        cut_points <- c(-1, opts$days, 999)
-        wx <- req(rv$weather) %>%
-          filter(year == opts$year) %>%
-          select(date, yday, gdd41)
-        cl <- req(rv[[opts$period]])
-        cl_gdd <- cl %>%
-          filter(yday > max(wx$yday)) %>%
-          select(yday, gdd41) %>%
-          mutate(date = start_of_year(opts$year) + yday - 1)
-        cl_risk <- cl %>%
-          select(yday, kill_by)
-        bind_rows(wx, cl_gdd) %>%
-          left_join(cl_risk, join_by(yday)) %>%
-          mutate(cutting = cut(yday, cut_points)) %>%
-          mutate(gdd41cum = cumsum(gdd41)) %>%
-          mutate(
-            days_since_cut = row_number() - 1,
-            gdd_since_cut = cumsum(gdd41),
-            .by = cutting
-          )
-      })
-
-      observe(print(plot_data()))
-
-
-      ## Render plot ----
-
-      output$plot <- renderPlotly({
-        opts <- list(
-          year = req(input$year),
-          climate = req(input$period)
-        )
-
-        df <- plot_data()
+        opts$climate = req(input$period)
+        df <- req(rv$plot_data)
         cl <- req(rv[[opts$climate]]) %>%
           mutate(date = start_of_year(opts$year) + yday - 1)
+        killing_freezes <- df %>% filter(kill)
+
+        cut_annot <- df %>%
+          summarize(
+            across(c(date, days_since_cut, gdd_since_cut), max),
+            .by = cutting
+          ) %>%
+          head(-1) %>%
+          select(-cutting) %>%
+          mutate(label = paste0(
+            "<b>", format(date, "%b %d"), "</b><br>",
+            days_since_cut, " days<br>",
+            round(gdd_since_cut), " GDD"
+          ))
+
+        last_spring_kill <- df %>%
+          filter(kill, yday < 150) %>%
+          tail(1) %>%
+          mutate(label = paste0("<b>", format(date, "%b %d"), "</b><br>Last spring kill"))
+
+        first_fall_kill <- df %>%
+          mutate(across(c(days_since_cut, gdd_since_cut), lag)) %>%
+          filter(kill, yday > 150) %>%
+          head(1) %>%
+          mutate(label = paste0(
+            "<b>", format(date, "%b %d"), "</b><br>",
+            "First fall kill<br>",
+            days_since_cut, " days<br>",
+            round(gdd_since_cut), " GDD"
+          ))
+
+        kill_annot <- bind_rows(last_spring_kill, first_fall_kill)
 
         plt <- df %>%
           plot_ly() %>%
           add_trace(
-            name = "Days since last cutting",
+            name = "Days since last kill or cut",
             x = ~date, y = ~days_since_cut,
-            type = "scatter", mode = "none",
-            hovertemplate = "%{y:.0f}",
+            type = "scatter", mode = "none", hovertemplate = "%{y:.0f}",
             showlegend = F
           ) %>%
           add_trace(
+            name = "Killing freeze (<24°F)",
+            x = killing_freezes$date, y = 200,
+            type = "bar", hovertemplate = "Yes",
+            marker = list(color = "blue"), width = 1000 * 60 * 60 * 24
+          ) %>%
+          add_trace(
             name = "Cumul. GDD41 (climate average)",
-            x = cl$date, y = cl$gdd41cum,
-            type = "scatter", mode = "lines",
-            hovertemplate = "%{y:.1f}",
-            line = list(
-              color = "#ad2b2f",
-              shape = "spline"),
-            yaxis = "y1"
+            x = cl$date, y = cl$gdd41cum, yaxis = "y1",
+            type = "scatter", mode = "lines", hovertemplate = "%{y:.1f}",
+            line = list(color = "#ad2b2f", shape = "spline")
           ) %>%
           add_trace(
             name = "Cumul. GDD41 (observed/projected)",
-            x = ~date, y = ~gdd41cum,
-            type = "scatter", mode = "lines",
-            hovertemplate = "%{y:.1f}",
-            line = list(
-              color = "#ff802e",
-              shape = "spline",
-              dash = "dot"),
-            yaxis = "y1"
+            x = ~date, y = ~gdd41cum, yaxis = "y1",
+            type = "scatter", mode = "lines", hovertemplate = "%{y:.1f}",
+            line = list(color = "#ff802e", shape = "spline", dash = "dot")
           ) %>%
           add_trace(
-            name = "GDD41 since last cutting",
-            x = ~date, y = ~gdd_since_cut,
-            type = "scatter", mode = "lines",
-            line = list(color = "#00a038"),
-            hovertemplate = "%{y:.1f}",
-            yaxis = "y1"
+            name = "GDD41 since last kill/cut",
+            x = ~date, y = ~gdd_since_cut, yaxis = "y1",
+            type = "scatter", mode = "lines", hovertemplate = "%{y:.1f}",
+            line = list(color = "#00a038")
           ) %>%
           add_trace(
             name = "Cumul. killing freeze prob.",
-            x = ~date, y = ~kill_by*100,
-            type = "scatter", mode = "lines",
-            hovertemplate = "%{y:.1f}%",
-            line = list(
-              color = "purple",
-              shape = "spline",
-              width = 1.5),
-            yaxis = "y2"
+            x = ~date, y = ~kill_by * 100, yaxis = "y2",
+            type = "scatter", mode = "lines", hovertemplate = "%{y:.1f}%",
+            line = list(color = "purple", shape = "spline", width = 1.5)
+          ) %>%
+          add_annotations(
+            data = cut_annot, x = ~date, y = ~gdd_since_cut, text = ~label,
+            arrowsize = .5,
+            font = list(size = 10)
+          ) %>%
+          add_annotations(
+            data = kill_annot, x = ~date, y = ~gdd_since_cut, text = ~label,
+            arrowsize = .5,
+            font = list(size = 10)
           ) %>%
           layout(
             legend = OPTS$plot_legend,
             xaxis = OPTS$plot_date_axis_weather,
-            yaxis = list(title = "Growing degree days (base 41°F)"),
+            yaxis = list(
+              title = "Growing degree days (base 41°F)",
+              fixedrange = T
+            ),
             yaxis2 = list(
-              title = "Cumul. killing freeze probability (<24°F)",
+              title = "Cumul. killing freeze prob. (<24°F)",
               overlaying = "y",
               side = "right",
               zeroline = F,
-              showgrid = F
+              showgrid = F,
+              fixedrange = T
             ),
             hovermode = "x unified"
           )
@@ -340,11 +386,7 @@ timingServer <- function(loc_data) {
           rect(0, 360, color = "blue")
         )
 
-        if (opts$year == cur_yr) {
-          plt %>% add_today(other_shapes = cut_zones)
-        } else {
-          plt %>% layout(shapes = cut_zones)
-        }
+        plt %>% add_today(yr = opts$year, date_yr = opts$year, other_shapes = cut_zones)
       })
 
 
