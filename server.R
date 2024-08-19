@@ -49,12 +49,14 @@ server <- function(input, output, session) {
   })
 
   plotServer(reactive(loc_data()))
+
+  growthServer(reactive(loc_data()))
+
   timingServer(reactive(loc_data()))
 
 
   # Main UI ----
 
-  ## main_ui ----
   output$main_ui <- renderUI({
     if (!rv$weather_ready) {
       dates <- format(as_date(weather_dates()), "%b %d")
@@ -80,42 +82,50 @@ server <- function(input, output, session) {
     )
   })
 
+
+  # Sidebar selector ----
+
+  sidebar_pages <- list(
+    "Weather Map" = list(
+      h3("Map display options"),
+      mapSidebarUI()
+    ),
+    "Weather Charts" = list(
+      h3("Weather charts"),
+      plotUI()
+    ),
+    "Cut Scheduling" = list(
+      h3("Alfalfa cut scheduling tool"),
+      timingUI()
+    ),
+    "Growth Projection" = list(
+      h3("Alfalfa growth projection"),
+      growthUI()
+    ),
+    "About" = list(
+      h3("About this app"),
+      uiOutput("about_ui")
+    )
+  )
+
   output$sidebar_ui <- renderUI({
     page <- req(input$navbar)
-
-    side <- if (page == "Weather Map") {
-      tagList(
-        h3("Map display options"),
-        mapSidebarUI()
-      )
-    } else if (page == "Weather Charts") {
-      tagList(
-        h3("Weather charts"),
-        plotUI()
-      )
-    } else if (page == "Cut Scheduling") {
-      tagList(
-        h3("Alfalfa cut scheduling tool"),
-        timingUI()
-      )
-    } else if (page == "About") {
-      tagList(
-        h3("About this app"),
-        uiOutput("about_ui")
-      )
-    }
+    sidebar_pages[[page]]
   })
 
 
-  ## about_ui ----
+  # About page ----
+
   output$about_ui <- renderUI({
     tagList(
       h4("Gridded weather and climate map"),
       p(HTML("Weather and climate data are presented on a 0.1 decimal degree grid (grid cells measure approximately 5 x 7 miles), with weather data originally sourced from NOAA and retrieved from <a href='https://agweather.cals.wisc.edu'>AgWeather</a> and climate data sourced from <a href='https://www.climatologylab.org/gridmet.html'>GridMET</a>. Clicking a grid cell will select that location for viewing in the charts and tools tabs.")),
       h4("Weather and climate charts"),
       p("To view detailed daily weather and climate data, you must first select a location on the map and switch to the charts tab. There are three types of charts, one focused on observed weather for this year and last, one for exploring climate averages, and a third with many options for customization. Elements are added to the charts in groups, but individual lines may be shown or hidden by clicking on items in the chart legend."),
-      h4("Alfalfa cut timing tool"),
+      h4("Alfalfa cut scheduling tool"),
       p("Traditionally, timing alfalfa cuttings is done based on a calendar or a grower's knowledge or experience. This tool helps to plan or evaluate a cutting schedule based on actual and projected growing degree days to identify optimal cut timing for plant health. During the growing season, alfalfa should be cut when between 900 and 1100 growing degree days (base 41°F) have elapsed since Jan 1 or the last time the crop was cut. In the fall, the last cut should be scheduled such that either the crop has enough time to reach maturity again before a killing freeze, or the crop has very little time (<360 GDD) before the first killing freeze."),
+      h4("Growth projection tool"),
+      p("Similar to the full-season cut scheduling tool, but with a simpler interface, this chart can help in tracking alfalfa growth since the last cut and identifying dates when the next cut should take place based on accumulated degree days. This tool also displays observed killing freezes (spring) and fall killing freeze probabilities based on climate averages."),
       h4("More information"),
       tags$ul(
         tags$li(a("UW Extension Crops and Soils - Alfalfa", href = "https://cropsandsoils.extension.wisc.edu/article-topic/alfalfa/")),

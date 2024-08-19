@@ -13,10 +13,9 @@ ui <- navbarPage(
       tags$meta(name = "keywords", content = "uw, wisconsin, alfalfa, weather, frost, freeze, growing degree days, risk, tool"),
       tags$link(rel = "shortcut icon", href = "favicon.ico"),
       tags$link(rel = "stylesheet", type = "text/css", href = "style.css"),
-      # tags$style(style),
       useShinyjs(),
       tags$script(src = "script.js"),
-      # includeHTML("google-analytics.html"),
+      includeHTML("www/google-analytics.html"),
       # tags$script(src = "html2canvas.min.js"),
       # tags$script(src = "saveAs.js")
     ),
@@ -28,6 +27,7 @@ ui <- navbarPage(
   tabPanel("Weather Map", icon = icon("map")),
   tabPanel("Weather Charts", icon = icon("chart-line")),
   tabPanel("Cut Scheduling", icon = icon("tractor")),
+  tabPanel("Growth Projection", icon = icon("leaf")),
   tabPanel("About", icon = icon("question")),
   footer = tags$footer(
     id = "footer-content",

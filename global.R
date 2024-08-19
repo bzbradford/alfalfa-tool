@@ -131,14 +131,12 @@ OPTS <- list(
   min_lng = -93.0,
   max_lng = -86.8,
 
-  # date settings
-  start_date = as_date(paste0(cur_yr - 1, "-1-1")),
-
   # interface settings
   weather_years = c(cur_yr, cur_yr - 1),
   # weather_date_fmt = "%b %-d, %Y",
   weather_date_fmt = "%b %-d",
   climate_date_fmt = "%b %-d",
+  weather_date_min = as_date(paste0(cur_yr - 1, "-1-1")),
   weather_date_max = NULL, # set in server
   climate_date_min = NULL, # set in server
   climate_date_max = NULL, # set in server
@@ -369,6 +367,7 @@ get_weather_grid <- function(d = yesterday()) {
     data %>%
       fix_coords() %>%
       select(lat, lng, date, min_temp, max_temp) %>%
+      inner_join(climate_grids, join_by(lat, lng)) %>%
       mutate(
         date = as_date(d),
         gdd41 = calc_gdd(min_temp, max_temp, 41, 86),
@@ -381,7 +380,7 @@ get_weather_grid <- function(d = yesterday()) {
 }
 
 weather_dates <- function() {
-  dates_need <- sort(seq.Date(OPTS$start_date, yesterday(), 1))
+  dates_need <- sort(seq.Date(OPTS$weather_date_min, yesterday(), 1))
   dates_have <- if (exists("weather")) sort(unique(weather$date))
   as.character(dates_need[!(dates_need %in% dates_have)])
 }
@@ -419,11 +418,15 @@ counties <- read_rds("data/counties.rds")
 
 if (!exists("climate")) {
   climate <- read_rds("data/climate.rds") %>% lapply(add_climate_cols)
+  climate_grids <- climate$c10 %>% distinct(lat, lng)
 }
 
 if (file.exists("data/weather.feather")) {
-  if (!exists("weather") || max(weather$date) != yesterday())
-  weather <- read_feather("data/weather.feather") %>% add_weather_cols()
+  if (!exists("weather") || max(weather$date) != yesterday()) {
+    weather <- read_feather("data/weather.feather") %>%
+      inner_join(climate_grids, join_by(lat, lng)) %>%
+      add_weather_cols()
+  }
 }
 
 # delete some weather for testing

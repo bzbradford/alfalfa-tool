@@ -1,3 +1,4 @@
+# Full-season cut timing
 
 timingUI <- function() {
   ns <- NS("timing")
@@ -46,49 +47,9 @@ timingServer <- function(loc_data) {
         })
         days <- days[between(days, 60, 300)]
         pause_date_reader()
+        rv$initial_cut_dates <- NULL
         rv$initial_cut_dates <- start_of_year() + unique(days) - 1
       }
-
-      ## Observed/projected data ----
-
-      weather_data <- reactive({
-        opts <- list(
-          year = req(input$year),
-          period = req(input$period)
-        )
-        wx <- req(rv$weather) %>%
-          filter(year == opts$year) %>%
-          select(date, yday, gdd41, kill) %>%
-          mutate(last_kill = if_else(kill, yday, NA)) %>%
-          fill(last_kill)
-        cl <- req(rv[[opts$period]])
-        cl_gdd <- cl %>%
-          filter(yday > max(wx$yday)) %>%
-          select(yday, gdd41) %>%
-          mutate(date = start_of_year(opts$year) + yday - 1)
-        cl_risk <- cl %>% select(yday, kill_by)
-        bind_rows(wx, cl_gdd) %>%
-          left_join(cl_risk, join_by(yday)) %>%
-          fill(last_kill) %>%
-          mutate(gdd41cum = cumsum(gdd41)) %>%
-          mutate(gdd_since_kill = cumsum(gdd41), .by = last_kill)
-      })
-
-      ## Plot data ----
-      observe({
-        cut_dates <- req(rv$set_cut_dates)
-        req(identical(cut_dates, sort(unique(cut_dates))))
-        cut_days <- yday(cut_dates)
-        cut_points <- c(-1, cut_days, 999)
-        df <- weather_data() %>%
-          mutate(cutting = cut(yday, cut_points)) %>%
-          mutate(
-            days_since_cut = row_number() - 1,
-            gdd_since_cut = cumsum(gdd41),
-            .by = c(last_kill, cutting)
-          )
-        rv$plot_data <- df
-      })
 
 
       # Interface ----
@@ -100,10 +61,9 @@ timingServer <- function(loc_data) {
 
         tagList(
           uiOutput(ns("options_ui")),
-          h4("Full-season alfalfa cut and kill schedule", align = "center"),
           uiOutput(ns("plot_title")),
           plotlyOutput(ns("plot"), height = "500px"),
-          div(class = "plot-caption", HTML("Today's date is indicated as a vertical dashed line. Future degree-day accumulation estimated based on climate average GDD/day. Weather data originally sourced from NOAA and retrieved from <a href='https://agweather.cals.wisc.edu'>AgWeather</a>, climate data sourced from <a href='https://www.climatologylab.org/gridmet.html'>GridMET</a>. Green zone represents optimal cut timing (900-1100 GDD since last cutting), blue zone (0-360 GDD) represents maximum grow-back since last cut and before first freeze. Ideally alfalfa should not be allowed to grow outside of this zone after the last fall cutting."))
+          div(class = "plot-caption", HTML("Today's date is indicated as a vertical dashed line. Future degree-day accumulation estimated based on climate average GDD/day. Green zone represents optimal cut timing (900-1100 GDD since last cutting), blue zone (0-360 GDD) represents acceptable grow-back since last cut and before first freeze. Ideally alfalfa should not be allowed to grow outside of this zone after the last fall cutting."))
         )
       })
 
@@ -273,17 +233,70 @@ timingServer <- function(loc_data) {
       })
 
 
+      ## Plot title ----
+
+      output$plot_title <- renderUI({
+        loc <- req(rv$loc)
+        title <- sprintf("Full-season alfalfa cut and kill schedule for %.1f°N, %.1f°W", loc$lat, loc$lng)
+        h4(title, align = "center")
+      })
+
+
+      # Plot data ----
+
+      weather_data <- reactive({
+        opts <- list(
+          year = req(input$year),
+          period = req(input$period)
+        )
+        wx <- req(rv$weather) %>%
+          filter(year == opts$year) %>%
+          select(date, yday, gdd41, kill) %>%
+          mutate(last_kill = if_else(kill, yday, NA)) %>%
+          fill(last_kill)
+        cl <- req(rv[[opts$period]])
+        cl_gdd <- cl %>%
+          filter(yday > max(wx$yday)) %>%
+          select(yday, gdd41) %>%
+          mutate(date = start_of_year(opts$year) + yday - 1)
+        cl_risk <- cl %>% select(yday, kill_by)
+        bind_rows(wx, cl_gdd) %>%
+          left_join(cl_risk, join_by(yday)) %>%
+          fill(last_kill) %>%
+          mutate(gdd41cum = cumsum(gdd41)) %>%
+          mutate(gdd_since_kill = cumsum(gdd41), .by = last_kill)
+      })
+
+      observe({
+        cut_dates <- req(rv$set_cut_dates)
+        req(identical(cut_dates, sort(unique(cut_dates))))
+        cut_days <- yday(cut_dates)
+        cut_points <- c(-1, cut_days, 999)
+        df <- weather_data() %>%
+          mutate(cutting = cut(yday, cut_points)) %>%
+          mutate(
+            days_since_cut = row_number() - 1,
+            gdd_since_cut = cumsum(gdd41),
+            .by = c(last_kill, cutting)
+          )
+        rv$plot_data <- df
+      })
+
+
       # Plot ----
 
       output$plot <- renderPlotly({
         opts <- list()
         opts$year <- req(input$year)
         opts$climate = req(input$period)
-        df <- req(rv$plot_data)
+        df <- req(rv$plot_data) %>%
+          filter(yday > 31)
         cl <- req(rv[[opts$climate]]) %>%
+          filter(yday > 31) %>%
           mutate(date = start_of_year(opts$year) + yday - 1)
         killing_freezes <- df %>% filter(kill)
 
+        # cutting date annotations
         cut_annot <- df %>%
           summarize(
             across(c(date, days_since_cut, gdd_since_cut), max),
@@ -297,11 +310,13 @@ timingServer <- function(loc_data) {
             round(gdd_since_cut), " GDD"
           ))
 
+        # find last spring kill date
         last_spring_kill <- df %>%
           filter(kill, yday < 150) %>%
           tail(1) %>%
           mutate(label = paste0("<b>", format(date, "%b %d"), "</b><br>Last spring kill"))
 
+        # find first fall killing freeze
         first_fall_kill <- df %>%
           mutate(across(c(days_since_cut, gdd_since_cut), lag)) %>%
           filter(kill, yday > 150) %>%
@@ -313,22 +328,42 @@ timingServer <- function(loc_data) {
             round(gdd_since_cut), " GDD"
           ))
 
+        # if there has been no fall killing freeze, find the 50% likelihood date
+        if (nrow(first_fall_kill) == 0) {
+          dt <- cl %>%
+            filter(yday > 200) %>%
+            slice_min(abs(kill_by - .5)) %>%
+            pull(date)
+          first_fall_kill <- df %>%
+            filter(date == first(dt)) %>%
+            mutate(label = paste0(
+              "<b>", format(date, "%b %d"), "</b><br>",
+              "50% kill<br>probability<br>",
+              days_since_cut, " days<br>",
+              round(gdd_since_cut), " GDD"
+            ))
+        }
+
         kill_annot <- bind_rows(last_spring_kill, first_fall_kill)
 
-        plt <- df %>%
-          plot_ly() %>%
+        plt <- plot_ly(df) %>%
           add_trace(
             name = "Days since last kill or cut",
             x = ~date, y = ~days_since_cut,
             type = "scatter", mode = "none", hovertemplate = "%{y:.0f}",
             showlegend = F
-          ) %>%
-          add_trace(
+          )
+
+        if (nrow(killing_freezes) > 0) {
+          plt <- plt %>% add_trace(
             name = "Killing freeze (<24°F)",
             x = killing_freezes$date, y = 200,
             type = "bar", hovertemplate = "Yes",
             marker = list(color = "blue"), width = 1000 * 60 * 60 * 24
-          ) %>%
+          )
+        }
+
+        plt <- plt %>%
           add_trace(
             name = "Cumul. GDD41 (climate average)",
             x = cl$date, y = cl$gdd41cum, yaxis = "y1",
@@ -351,7 +386,7 @@ timingServer <- function(loc_data) {
             name = "Cumul. killing freeze prob.",
             x = ~date, y = ~kill_by * 100, yaxis = "y2",
             type = "scatter", mode = "lines", hovertemplate = "%{y:.1f}%",
-            line = list(color = "purple", shape = "spline", width = 1.5)
+            line = list(color = "purple", width = 1.5)
           ) %>%
           add_annotations(
             data = cut_annot, x = ~date, y = ~gdd_since_cut, text = ~label,
@@ -368,7 +403,8 @@ timingServer <- function(loc_data) {
             xaxis = OPTS$plot_date_axis_weather,
             yaxis = list(
               title = "Growing degree days (base 41°F)",
-              fixedrange = T
+              fixedrange = T,
+              range = c(0, NA)
             ),
             yaxis2 = list(
               title = "Cumul. killing freeze prob. (<24°F)",
@@ -376,12 +412,14 @@ timingServer <- function(loc_data) {
               side = "right",
               zeroline = F,
               showgrid = F,
-              fixedrange = T
+              fixedrange = T,
+              range = c(0, 100)
             ),
             hovermode = "x unified"
           )
 
         cut_zones <- list(
+          rect(800, 1200, color = "green"),
           rect(900, 1100, color = "green"),
           rect(0, 360, color = "blue")
         )
