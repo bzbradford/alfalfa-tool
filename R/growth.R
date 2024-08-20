@@ -44,21 +44,23 @@ growthServer <- function(loc_data) {
 
         div(
           class = "well", style = "padding-bottom: 0px;",
-          fluidRow(
-            column(6,
+          div(
+            class = "inline-flex",
+            div(
               div(tags$label("Date of last cut")),
               div(
-                class = "inline-flex",
+                class = "inline-flex", style = "gap: 5px;",
                 uiOutput(ns("date_ui")),
                 div(
+                  btn("date_jan1", "Jan 1"),
                   btn("date_today", "Today"),
                   btn("date_reset", "Reset")
                 )
               )
             ),
-            column(6,
+            div(
               radioButtons(
-                ns("climate"), "Project forward with:",
+                ns("climate"), "GDD projection and freeze risk:",
                 choices = OPTS$climate_period_choices
               )
             )
@@ -75,13 +77,9 @@ growthServer <- function(loc_data) {
         )
       })
 
-      observeEvent(input$date_today, {
-        rv$initial_date <- yesterday() + 1
-      })
-
-      observeEvent(input$date_reset, {
-        rv$initial_date <- yesterday() - 28
-      })
+      observeEvent(input$date_jan1, { rv$initial_date <- start_of_year() })
+      observeEvent(input$date_today, { rv$initial_date <- yesterday() + 1 })
+      observeEvent(input$date_reset, { rv$initial_date <- yesterday() - 28 })
 
       output$plot_title <- renderUI({
         loc <- req(rv$loc)
@@ -117,6 +115,7 @@ growthServer <- function(loc_data) {
 
       output$plot <- renderPlotly({
         df <- req(rv$plot_data)
+        opts <- list()
 
         thresholds <- seq(800, 1200, by = 100)
         threshold_days <- sapply(thresholds, function(gdd) {
@@ -180,13 +179,28 @@ growthServer <- function(loc_data) {
             x = ~date, y = ~gdd_since_cut, yaxis = "y1",
             type = "scatter", mode = "lines", hovertemplate = "%{y:.1f}",
             line = list(color = "#00a038")
-          ) %>%
-          add_trace(
-            name = "Cumul. killing freeze prob.",
-            x = ~date, y = ~kill_by * 100, yaxis = "y2",
-            type = "scatter", mode = "lines", hovertemplate = "%{y:.1f}%",
-            line = list(color = "purple", width = 1.5)
-          ) %>%
+          )
+
+        if (max(df$kill_by) > 0) {
+          plt <- plt %>%
+            add_trace(
+              name = "Cumul. killing freeze prob.",
+              x = ~date, y = ~kill_by * 100, yaxis = "y2",
+              type = "scatter", mode = "lines", hovertemplate = "%{y:.1f}%",
+              line = list(color = "purple", width = 1.5)
+            )
+          opts$y2 <- list(
+            title = "Cumul. killing freeze prob. (<24°F)",
+            overlaying = "y",
+            side = "right",
+            zeroline = F,
+            showgrid = F,
+            fixedrange = T,
+            range = c(0, 100)
+          )
+        }
+
+        plt <- plt %>%
           add_annotations(
             data = cut_annot, x = ~date, y = ~gdd_since_cut, text = ~label,
             arrowsize = .5,
@@ -202,6 +216,8 @@ growthServer <- function(loc_data) {
             )
         }
 
+
+
         plt <- plt %>%
           layout(
             legend = OPTS$plot_legend,
@@ -209,17 +225,9 @@ growthServer <- function(loc_data) {
             yaxis = list(
               title = "Growing degree days (base 41°F)",
               fixedrange = T,
-              range = c(0, max(df$gdd_since_cut))
+              range = c(0, max(df$gdd_since_cut) * 1.1)
             ),
-            yaxis2 = list(
-              title = "Cumul. killing freeze prob. (<24°F)",
-              overlaying = "y",
-              side = "right",
-              zeroline = F,
-              showgrid = F,
-              fixedrange = T,
-              range = c(0, 100)
-            ),
+            yaxis2 = opts$y2,
             hovermode = "x unified"
           )
 

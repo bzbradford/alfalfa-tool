@@ -5,7 +5,7 @@ account: bbradford
 server: connect.doit.wisc.edu
 hostUrl: https://connect.doit.wisc.edu/__api__
 appId: 306
-bundleId: 2074
+bundleId: 2079
 url: https://connect.doit.wisc.edu/alfalfa-tool/
 version: 1
 asMultiple: FALSE
