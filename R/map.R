@@ -29,24 +29,6 @@ mapServer <- function() {
       ns <- session$ns
 
 
-      # test observers
-
-      # observe({
-      #   print(grid_data())
-      # })
-
-      # observe({
-      #   print(list(
-      #     grid_data = grid_data(),
-      #     rv = list(
-      #       date_id = rv$date_id,
-      #       date_set = rv$date_set,
-      #       date_vals = rv$date_vals
-      #     )
-      #   ))
-      # })
-
-
       # Reactive values ----
 
       rv <- reactiveValues(
@@ -67,6 +49,7 @@ mapServer <- function() {
         leafletProxy("map") %>% clearGroup(layers$grid)
       })
 
+
       ## Main map options UI ----
 
       output$map_opts_ui <- renderUI({
@@ -85,7 +68,9 @@ mapServer <- function() {
         )
       })
 
-      ## data type UI ----
+
+      ## Data type UI ----
+
       output$type_ui <- renderUI({
         choices <- OPTS$map_type_choices
         radioGroupButtons(
@@ -96,64 +81,97 @@ mapServer <- function() {
         )
       })
 
+
       ## Year/Period options UI ----
+
       output$type_opts_ui <- renderUI({
         type <- req(input$data_type)
-
-        div(
-          class = "inline-flex",
-          if (type %in% c("weather", "comparison")) {
-            radioGroupButtons(
-              ns("weather_year"), "Weather year",
-              choices = OPTS$weather_years,
-              selected = coalesce(input$weather_year, as.character(cur_yr)),
-              size = "sm"
-            )
-          },
-          if (type %in% c("climate", "comparison")) {
-            choices <- OPTS$climate_period_choices
-            radioGroupButtons(
-              ns("climate_period"), "Climate period",
-              choices = choices,
-              selected = coalesce(input$climate_period, first(choices)),
-              size = "sm"
-            )
-          }
-        )
-      })
-
-      ## Data value options UI ----
-      output$value_opts_ui <- renderUI({
-        type <- req(input$data_type)
-        opts <- list()
-
-        if (type == "weather") {
-          opts$id <- "weather_value"
-          opts$choices <- OPTS$grid_cols$weather
-          opts$selected <- input$weather_value
-        } else if (type == "climate") {
-          opts$id <- "climate_value"
-          opts$choices <- OPTS$grid_cols$climate
-          opts$selected <- input$climate_value
-        } else if (type == "comparison") {
-          opts$id <- "comparison_value"
-          opts$choices <- OPTS$grid_cols$comparison
-          opts$selected <- input$comparison_value
+        elems <- list()
+        if (type %in% c("weather", "comparison")) {
+          elems$weather <- uiOutput(ns("weather_year_ui"))
+        }
+        if (type %in% c("climate", "comparison")) {
+          elems$climate <- uiOutput(ns("climate_period_ui"))
         }
 
+        div(class = "inline-flex", elems)
+      })
+
+      output$weather_year_ui <- renderUI({
         radioGroupButtons(
-          ns(opts$id), "Display value",
-          choices = opts$choices,
-          selected = coalesce(opts$selected, first(opts$choices)),
+          ns("weather_year"), "Weather year",
+          choices = OPTS$weather_years,
+          selected = coalesce(input$weather_year, as.character(cur_yr)),
           size = "sm"
         )
       })
 
+      output$climate_period_ui <- renderUI({
+        choices <- OPTS$climate_period_choices
+        radioGroupButtons(
+          ns("climate_period"), "Climate period",
+          choices = choices,
+          selected = coalesce(input$climate_period, first(choices)),
+          size = "sm"
+        )
+      })
+
+
+      ## Data value options UI ----
+
+      output$value_opts_ui <- renderUI({
+        type <- req(input$data_type)
+
+        if (type == "weather") {
+          uiOutput(ns("weather_value_ui"))
+        } else if (type == "climate") {
+          uiOutput(ns("climate_value_ui"))
+        } else if (type == "comparison") {
+          uiOutput(ns("comparison_value_ui"))
+        }
+      })
+
+      output$weather_value_ui <- renderUI({
+        choices <- OPTS$grid_cols$weather
+        radioGroupButtons(
+          ns("weather_value"), "Display value",
+          choices = choices,
+          selected = coalesce(input$weather_value, first(choices)),
+          size = "sm"
+        )
+      })
+
+      output$climate_value_ui <- renderUI({
+        choices <- OPTS$grid_cols$climate
+        radioGroupButtons(
+          ns("climate_value"), "Display value",
+          choices = choices,
+          selected = coalesce(input$climate_value, first(choices)),
+          size = "sm"
+        )
+      })
+
+      output$comparison_value_ui <- renderUI({
+        choices <- OPTS$grid_cols$comparison
+        radioGroupButtons(
+          ns("comparison_value"), "Display value",
+          choices = choices,
+          selected = coalesce(input$comparison_value, first(choices)),
+          size = "sm"
+        )
+      })
+
+
       ## Smoothing options UI ----
+
       output$smoothing_opts_ui <- renderUI({
         type <- req(input$data_type)
-        choices <- OPTS$data_smoothing_choices
+        value <- req(input[[paste0(type, "_value")]])
+        if (value %in% OPTS$smoothable_cols) uiOutput(ns("smoothing_ui"))
+      })
 
+      output$smoothing_ui <- renderUI({
+        choices <- OPTS$data_smoothing_choices
         radioGroupButtons(
           ns("smoothing"), "Data smoothing",
           choices = choices,
@@ -162,87 +180,81 @@ mapServer <- function() {
         )
       })
 
-      ## Toggle smoothing buttons ----
-      observe({
-        type <- req(input$data_type)
-        value <- if (type == "weather") req(input$weather_value)
-        else if (type == "climate") req(input$climate_value)
-        else if (type == "comparison") req(input$comparison_value)
-        toggleState("smoothing", value %in% OPTS$smoothable_cols)
-      })
-
 
       ## Date selector UI ----
 
       output$date_slider_ui <- renderUI({
-        i <- list(type = req(input$data_type))
-        opts <- list()
+        type <- req(input$data_type)
 
-        if (i$type == "weather") {
-          i$year <- req(input$weather_year)
-          i$value <- req(input$weather_value)
-          opts$fmt <- OPTS$weather_date_fmt
-          opts$max <- min(yesterday(), end_of_year(i$year))
-        }
-
-        if (i$type == "climate") {
-          i$year <- year(yesterday())
-          i$period <- req(input$climate_period)
-          i$value <- req(input$climate_value)
-          opts$fmt <- OPTS$climate_date_fmt
-          opts$max <- end_of_year(i$year)
-        }
-
-        if (i$type == "comparison") {
-          i$year <- req(input$weather_year)
-          i$period <- req(input$climate_period)
-          i$value <- req(input$comparison_value)
-          opts$fmt <- OPTS$weather_date_fmt
-          opts$max <- min(yesterday(), end_of_year(i$year))
-        }
-
-        opts$min <- start_of_year(i$year)
-
-        # enable double-ended slider for cumulative gdd
-        # if set_dates is defined, use those values
-        # otherwise use existing or defaults
-        set_dates <- rv$date_set
-        if (i$value %in% OPTS$cumulative_cols) {
-          opts$id <- "date2"
-          opts$value <- align_dates(c(
-            coalesce(set_dates$start, input$date2[1], opts$min),
-            coalesce(set_dates$end, input$date2[2], input$date, yesterday())
-          ), i$year)
+        if (type %in% c("weather", "comparison")) {
+          uiOutput(ns("weather_date_ui"))
         } else {
-          opts$id <- "date"
-          opts$value <- align_dates(
-            coalesce(set_dates$end, input$date, input$date2[2], yesterday()),
-            i$year
-          )
+          uiOutput(ns("climate_date_ui"))
         }
+      })
 
-        rv$date_id <- opts$id
+      output$weather_date_ui <- renderUI({
+        opts <- list()
+        opts$type <- req(input$data_type)
+        opts$year <- req(input$weather_year)
+        opts$value <- req(input[[paste0(opts$type, "_value")]])
+        opts$min <- start_of_year(opts$year)
+        opts$max <- min(yesterday(), end_of_year(opts$year))
+        opts$prev_dates <- rv$date_set
+        opts$end_date <-
+          coalesce(opts$prev_dates$end, rev(input$weather_date)[1], yesterday()) %>%
+          align_dates(opts$min) %>%
+          clamp(opts$min, opts$max)
+        if (opts$value %in% OPTS$cumulative_cols) {
+          opts$start_date <-
+            coalesce(opts$prev_dates$start, rev(input$weather_date)[2], opts$min) %>%
+            align_dates(opts$min)
+        }
         sliderInput(
-          ns(opts$id), "Date",
+          ns("weather_date"), "Date",
           min = opts$min, max = opts$max,
-          value = opts$value,
-          timeFormat = opts$fmt
+          value = as.Date(c(opts$start_date, opts$end_date)),
+          timeFormat = OPTS$weather_date_fmt
+        )
+      })
+
+      output$climate_date_ui <- renderUI({
+        opts <- list()
+        opts$type <- req(input$data_type)
+        opts$period <- req(input$climate_period)
+        opts$value <- req(input[[paste0(opts$type, "_value")]])
+        opts$min <- start_of_year()
+        opts$max <- end_of_year()
+        opts$prev_dates <- rv$date_set
+        opts$end_date <-
+          coalesce(opts$prev_dates$end, rev(input$climate_date)[1], rev(input$weather_date)[1], yesterday()) %>%
+          align_dates(opts$min) %>%
+          clamp(opts$min, opts$max)
+        if (opts$value %in% OPTS$cumulative_cols) {
+          opts$start_date <-
+            coalesce(opts$prev_dates$start, rev(input$climate_date)[2], rev(input$weather_date)[2], opts$min) %>%
+            align_dates(opts$min)
+        }
+        sliderInput(
+          ns("climate_date"), "Date",
+          min = opts$min, max = opts$max,
+          value = as.Date(c(opts$start_date, opts$end_date)),
+          timeFormat = OPTS$climate_date_fmt
         )
       })
 
       # store date slider values in rv
       observe({
-        dt <- req(input[[req(rv$date_id)]])
+        type <- req(input$data_type)
+        dt <- if (type == "climate") req(input$climate_date) else req(input$weather_date)
         prev <- rv$date_vals
         dates <- list(start = NULL, end = NULL)
 
-        if (length(dt) == 2) {
-          dates$start <- dt[1]
-          dates$end <- dt[2]
+        dates <- if (length(dt) == 2) {
+          list(start = dt[1], end = dt[2])
         } else {
-          dates$end <- dt
           start_adjust <- ifelse(is.null(prev$start), 0, yday(prev$start) - 1)
-          dates$start <- start_of_year(dt) + start_adjust
+          list(start = start_of_year(dt) + start_adjust, end = dt)
         }
 
         rv$date_set <- NULL
@@ -371,6 +383,8 @@ mapServer <- function() {
         opts <- grid_data()$opts
         cols <- OPTS$grid_cols[[opts$type]]
         title <- setNames(names(cols), cols)[[opts$col]]
+        datestr <- paste(format(opts$date, "%b %d"), collapse = "-")
+        title <- paste0(title, " - ", datestr)
         if (opts$smoothing != 1) {
           title <- paste0(title, " - ", opts$smoothing, "-day average")
         }
@@ -397,7 +411,6 @@ mapServer <- function() {
             overlayGroups = unlist(layers, use.names = F),
             options = layersControlOptions(collapsed = F)
           ) %>%
-          # addFullscreenControl(pseudoFullscreen = T) %>%
           addEasyButtonBar(
             easyButton(
               position = "topleft",
@@ -534,23 +547,26 @@ mapServer <- function() {
       grid_data <- reactive({
         opts <- list()
         opts$type <- req(input$data_type)
+        opts$col <- req(input[[paste0(opts$type, "_value")]])
         opts$smoothing <- req(input$smoothing) %>% as.numeric()
-        opts$date <- req(input[[req(rv$date_id)]])
+        opts$date <- if (opts$type == "climate") req(input$climate_date) else req(input$weather_date)
+        if (opts$col %in% OPTS$cumulative_cols) {
+          req(length(opts$date) == 2)
+        } else {
+          req(length(opts$date) == 1)
+        }
 
         # set grid data
         grid <-
           if (opts$type == "weather") {
-            opts$col <- req(input$weather_value)
             weather %>%
               prepare_weather_grid_data(opts$col, opts$date, opts$smoothing)
           } else if (opts$type == "climate") {
             opts$period <- req(input$climate_period)
-            opts$col <- req(input$climate_value)
             climate[[opts$period]] %>%
               prepare_climate_grid_data(opts$col, opts$date, opts$smoothing)
           } else if (opts$type == "comparison") {
             opts$period <- req(input$climate_period)
-            opts$col <- req(input$comparison_value)
             wx <- weather %>%
               prepare_weather_grid_data(opts$col, opts$date, opts$smoothing) %>%
               rename(c(wx_value = value))
@@ -571,6 +587,8 @@ mapServer <- function() {
         grid <- grid_data()$grid
         opts <- grid_data()$opts
         opts$autoscale <- isTRUE(input$legend_autoscale)
+
+        req(nrow(grid) > 0)
 
         # percent frost/freeze palette
         if (opts$col %in% OPTS$percent_cols) {
