@@ -16,6 +16,7 @@ suppressMessages({
   library(leaflet) # map
   library(leaflet.extras) # map JS buttons
   library(plotly) # plots
+  library(markdown) #includeMarkdown
 })
 
 
@@ -184,7 +185,8 @@ OPTS <- list(
   ),
 
   # boilerplate
-  location_validation_msg = "Please select a grid cell on the map first. Use the crosshair icon on the map to automatically select your location, or enter a place name in the searchbox below the map.",
+  location_validation_msg = "Please select a location on the map first. Use the crosshair icon on the map to automatically select your location, or enter a place name in the searchbox below the map.",
+  weather_plot_caption = "Today's date is indicated as a vertical dashed line. Click on any item in the plot legend to toggle it on or off. Click and drag on the plot to zoom in, double click to reset view. Click on the camera icon in the plot menu to download a copy of the plot.",
 
   # plotly settings
   plot_date_axis_climate = list(

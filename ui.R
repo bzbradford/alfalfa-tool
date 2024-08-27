@@ -1,7 +1,7 @@
 #- ui.R -#
 
 ui <- navbarPage(
-  title = "Alfalfa Weather Tool",
+  title = "Alfalfa Cutting Tool",
   id = "navbar",
   theme = shinytheme("flatly"),
   position = "fixed-top",
@@ -22,11 +22,11 @@ ui <- navbarPage(
       uiOutput("main_ui") %>% withSpinnerProxy()
     )
   ),
-  tabPanel("Weather Map", icon = icon("map")),
-  tabPanel("Weather Charts", icon = icon("chart-line")),
-  tabPanel("Cut Scheduling", icon = icon("tractor")),
-  tabPanel("Growth Projection", icon = icon("leaf")),
-  tabPanel("About", icon = icon("question")),
+  tabPanel("Weather Map", icon = icon("map"), value = "map"),
+  tabPanel("Growth Projection", icon = icon("leaf"), value = "growth"),
+  tabPanel("Season Planning", icon = icon("tractor"), value = "timing"),
+  tabPanel("Weather Charts", icon = icon("chart-line"), value = "charts"),
+  tabPanel("About", icon = icon("question"), value = "about"),
   footer = tags$footer(
     id = "footer-content",
     br(),
@@ -39,7 +39,10 @@ ui <- navbarPage(
       ", UW-Madison Entomology",
       br(),
       "Last updated:", format(file.info(".")$mtime, "%Y-%m-%d."),
-      a("View source code", href = "https://github.com/bzbradford/alfalfa-tool", target = "_blank")
+      a("View source code", href = "https://github.com/bzbradford/alfalfa-tool", target = "_blank", .noWS = "after"), ".",
+      br(),
+      "Feedback welcome!",
+      a("Click here to take our survey.", href = "https://uwmadison.co1.qualtrics.com/jfe/form/SV_81RoNUXYxlicCa2", target = "_blank")
     )
   )
 )

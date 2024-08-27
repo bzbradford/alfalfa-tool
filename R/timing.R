@@ -2,7 +2,10 @@
 
 timingUI <- function() {
   ns <- NS("timing")
-  uiOutput(ns("main_ui"))
+  tagList(
+    p("Traditionally, timing alfalfa cuttings is done based on a calendar or a grower's knowledge or experience. This tool helps to plan or evaluate a cutting schedule based on actual and projected growing degree days to identify optimal cut timing for plant health. During the growing season, alfalfa is generally cut when between 800 and 1100 growing degree days (base 41°F) have elapsed since spring regrowth or last cutting. In the fall, the last cut should be scheduled such that either the crop has enough time to reach maturity again before a killing freeze or has very little time (<360 GDD) before the first killing freeze."),
+    uiOutput(ns("main_ui"))
+  )
 }
 
 timingServer <- function(loc_data) {
@@ -63,7 +66,7 @@ timingServer <- function(loc_data) {
         tagList(
           uiOutput(ns("options_ui")),
           plotlyOutput(ns("plot"), height = "500px"),
-          div(class = "plot-caption", HTML("Today's date is indicated as a vertical dashed line. Future degree-day accumulation estimated based on climate average GDD/day. Green zone represents optimal cut timing (900-1100 GDD since last cutting), blue zone (0-360 GDD) represents acceptable grow-back since last cut and before first freeze. Ideally alfalfa should not be allowed to grow outside of this zone after the last fall cutting. Click and drag on plot to zoom in, double-click to reset. Download with camera icon in plot menu."))
+          div(class = "plot-caption", HTML("Today's date is indicated as a vertical dashed line. Future degree-day accumulation estimated based on climate average GDD/day. Dark green zone represents optimal cut timing (900-1100 GDD since last cutting), blue zone (0-360 GDD) represents acceptable grow-back since last cut and before first freeze. Click and drag on plot to zoom in, double-click to reset. Click the camera icon in the plot menu to download a copy."))
         )
       })
 

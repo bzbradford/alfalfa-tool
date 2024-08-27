@@ -520,17 +520,19 @@ mapServer <- function() {
       # TODO: add other data to label?
       set_grid_labels <- function(.data, opts, selected = F) {
         cols <- OPTS$grid_cols[[opts$type]]
+
         prefix <- setNames(names(cols), cols)[[opts$col]]
         .data %>% mutate(
           label = paste0(
             str_glue("<b>{lat}°N, {lng}°W</b>"),
-            { if (selected) " (Selected)"}, "<br>",
+            { if (selected) " (Selected)"},
+            "<br>",
             if (opts$type == "weather" & opts$col %in% c("frost", "freeze")) {
               sprintf("%s: %s", prefix, value)
             } else if (opts$col %in% OPTS$percent_cols) {
               sprintf("%s: %.1f%%", prefix, value * 100)
             } else if (opts$type == "comparison") {
-              sprintf("%s: %+.1f", prefix, value)
+              sprintf("%s: %+.1f<br>Observed: %.1f, Average: %.1f", prefix, value, wx_value, cl_value)
             } else {
               sprintf("%s: %.1f", prefix, value)
             }

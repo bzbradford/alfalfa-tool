@@ -2,7 +2,10 @@
 
 plotUI <- function() {
   ns <- NS("plot")
-  uiOutput(ns("main_ui"))
+  tagList(
+    p("View detailed weather and climate charts for individual locations selected on the map."),
+    uiOutput(ns("main_ui"))
+  )
 }
 
 plotServer <- function(loc_data) {
@@ -59,23 +62,23 @@ plotServer <- function(loc_data) {
                 radioButtons(
                   ns("weather_year"), "Weather year",
                   choices = choices$year,
-                  inline = T
+                  inline = TRUE
                 ),
                 radioButtons(
                   ns("weather_smoothing"), "Data smoothing options",
                   choices = choices$smoothing,
-                  inline = T
+                  inline = TRUE
                 ),
                 radioButtons(
                   ns("weather_gdd"), "Show growing degree days",
                   choices = choices$gdd,
-                  inline = T
+                  inline = TRUE
                 )
               )
             )
           ),
           plotlyOutput(ns("weather_plot"), height = "600px"),
-          div(class = "plot-caption", HTML("Click on any legend item in the plot to show or hide it. Weather data originally sourced from NOAA and retrieved from <a href='https://agweather.cals.wisc.edu/'>AgWeather</a>. Click and drag on plot to zoom in, double-click to reset. Download with camera icon in plot menu."))
+          div(class = "plot-caption", OPTS$weather_plot_caption)
         )
       })
 
@@ -161,7 +164,7 @@ plotServer <- function(loc_data) {
             )
           ),
           plotlyOutput(ns("climate_plot"), height = "600px"),
-          div(class = "plot-caption", HTML("Click on any legend item in the plot to show or hide it. Today's date is indicated as a vertical dashed line. Climate data sourced from <a href='https://www.climatologylab.org/gridmet.html'>GridMET</a>. Click and drag on plot to zoom in, double-click to reset. Download with camera icon in plot menu."))
+          div(class = "plot-caption", OPTS$weather_plot_caption)
         )
       })
 
@@ -251,7 +254,7 @@ plotServer <- function(loc_data) {
             open = "Plot options"
           ),
           plotlyOutput(ns("custom_plot"), height = "600px"),
-          div(class = "plot-caption", HTML("Click on any legend item in the plot to show or hide it. Today's date is indicated as a vertical dashed line. Weather data originally sourced from NOAA and retrieved from <a href='https://agweather.cals.wisc.edu'>AgWeather</a>, climate data sourced from <a href='https://www.climatologylab.org/gridmet.html'>GridMET</a>. Click and drag on plot to zoom in, double-click to reset. Download with camera icon in plot menu."))
+          div(class = "plot-caption", OPTS$weather_plot_caption)
         )
       })
 

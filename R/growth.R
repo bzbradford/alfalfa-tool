@@ -2,7 +2,10 @@
 
 growthUI <- function() {
   ns <- NS("growth")
-  uiOutput(ns("main_ui"))
+  tagList(
+    p("This tool estimates alfalfa growth since the last cutting using observed weather values prior and climate averages. Date estimates for certain degree-day thresholds and killing freeze risks will be provided."),
+    uiOutput(ns("main_ui"))
+  )
 }
 
 growthServer <- function(loc_data) {
@@ -12,7 +15,8 @@ growthServer <- function(loc_data) {
       ns <- session$ns
 
       rv <- reactiveValues(
-        initial_date = yesterday() - 28
+        initial_date = yesterday() - 28,
+        loc_ready = FALSE
       )
 
       # assign incoming data
@@ -38,7 +42,7 @@ growthServer <- function(loc_data) {
         tagList(
           uiOutput(ns("options_ui")),
           plotlyOutput(ns("plot"), height = "500px"),
-          div(class = "plot-caption", HTML("Today's date is indicated as a vertical dashed line. Green zone represents optimal cut timing (900-1100 GDD since last cutting), blue zone (0-360 GDD) represents maximum grow-back since last cut and before first freeze. Ideally alfalfa should not be allowed to grow outside of this zone after the last fall cutting. Click and drag on plot to zoom in, double-click to reset. Download with camera icon in plot menu."))
+          div(class = "plot-caption", "Today's date is indicated as a vertical dashed line. Green zone represents optimal cut timing (900-1100 GDD since last cutting), blue zone (0-360 GDD) represents maximum grow-back since last cut and before first freeze. Ideally alfalfa should not be allowed to grow outside of this zone after the last fall cutting. Click and drag on plot to zoom in, double-click to reset. Click the camera icon in the plot menu to download a copy.")
         )
       })
 
@@ -118,6 +122,20 @@ growthServer <- function(loc_data) {
           mutate(gdd_since_cut = cumsum(gdd41), .by = last_kill) %>%
           mutate(days_since_cut = row_number() - 1)
 
+        rv$plot_data <- df
+      })
+
+
+      # Plot ----
+
+      output$plot <- renderPlotly({
+        opts <- list()
+        opts$loc <- req(rv$loc)
+        opts$cut_date <- req(input$cut_date)
+        opts$title <- sprintf("Alfalfa growth projection since %s for %.1f°N, %.1f°W", format(opts$cut_date, "%b %d, %Y"), opts$loc$lat, opts$loc$lng)
+
+        df <- req(rv$plot_data)
+
         # cutting thresholds
         thresholds <- seq(800, 1200, by = 100)
         thresholds <- thresholds[thresholds < last(df$gdd_since_cut)]
@@ -125,8 +143,13 @@ growthServer <- function(loc_data) {
           df[which.min(abs(gdd - df$gdd_since_cut)),]$yday
         })
 
-        df_clip <- df %>%
-          filter(yday <= max(yday(yesterday()) + 1, last(threshold_days) + 30))
+        end_day <- if (length(thresholds) > 0) {
+          max(yday(yesterday()) + 1, last(threshold_days) + 30)
+        } else {
+          yday(end_of_year())
+        }
+
+        df_clip <- df %>% filter(yday <= end_day)
 
         cut_annot <- df_clip %>%
           filter(yday %in% threshold_days) %>%
@@ -140,6 +163,7 @@ growthServer <- function(loc_data) {
           filter(yday > 200) %>%
           slice_min(abs(kill_by - .5)) %>%
           pull(date)
+
         kill_annot <- df_clip %>%
           filter(date == first(kill_date)) %>%
           mutate(label = paste0(
@@ -149,28 +173,8 @@ growthServer <- function(loc_data) {
             round(gdd_since_cut), " GDD"
           ))
 
-        rv$plot_data <- list(
-          df = df_clip,
-          cut_annot = cut_annot,
-          kill_annot = kill_annot
-        )
-      })
-
-
-      # Plot ----
-
-      output$plot <- renderPlotly({
-        opts <- list()
-        opts$loc <- req(rv$loc)
-        opts$cut_date <- req(input$cut_date)
-        opts$title <- sprintf("Alfalfa growth projection since %s for %.1f°N, %.1f°W", format(opts$cut_date, "%b %d, %Y"), opts$loc$lat, opts$loc$lng)
-
-        plot_data <- req(rv$plot_data)
-        df <- plot_data$df
-        cut_annot <- plot_data$cut_annot
-        kill_annot <- plot_data$kill_annot
-
-        plt <- df %>%
+        # base plot
+        plt <- df_clip %>%
           plot_ly() %>%
           add_trace(
             name = "Days since last kill or cut",
@@ -179,16 +183,19 @@ growthServer <- function(loc_data) {
             showlegend = F
           )
 
+        # add observed hard freezes if any
         freezes <- df %>% filter(kill)
         if (nrow(freezes) > 0) {
           plt <- plt %>% add_trace(
             name = "Killing freeze (<24°F)",
             x = freezes$date, y = 200,
             type = "bar", hovertemplate = "Yes",
-            marker = list(color = "blue"), width = 1000 * 60 * 60 * 24
+            marker = list(color = "blue"),
+            width = 1000 * 60 * 60 * 24
           )
         }
 
+        # add gdd traces
         plt <- plt %>%
           add_trace(
             name = "GDD41",
@@ -203,6 +210,7 @@ growthServer <- function(loc_data) {
             line = list(color = "#00a038")
           )
 
+        # add cumulative freeze probability
         if (max(df$kill_by) > 0) {
           plt <- plt %>%
             add_trace(
@@ -222,19 +230,27 @@ growthServer <- function(loc_data) {
           )
         }
 
-        plt <- plt %>%
-          add_annotations(
-            data = cut_annot, x = ~date, y = ~gdd_since_cut, text = ~label,
-            arrowsize = .5,
-            font = list(size = 10)
-          )
+        # add cut annotation if any
+        if (nrow(cut_annot) > 0) {
+          plt <- plt %>%
+            add_annotations(
+              data = cut_annot,
+              x = ~date, y = ~gdd_since_cut,
+              text = ~label,
+              ax = -25, ay = -35,
+              arrowsize = .5,
+              font = list(size = 10)
+            )
+        }
 
+        # add kill annotation if any
         if (nrow(kill_annot) > 0) {
           plt <- plt %>%
             add_annotations(
               data = kill_annot,
               x = ~date, y = 50, yref = "y2",
               text = ~label,
+              ax = 40, ay = 30,
               arrowsize = .5,
               font = list(size = 10)
             )
