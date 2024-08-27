@@ -44,6 +44,12 @@ plotServer <- function(loc_data) {
 
       ## weather_ui ----
       output$weather_ui <- renderUI({
+        choices <- list(
+          year = c(OPTS$weather_years, "All"),
+          smoothing = OPTS$data_smoothing_choices,
+          gdd = c("None", "Cumulative", "Daily")
+        )
+
         tagList(
           bsCollapse(
             bsCollapsePanel(
@@ -52,40 +58,24 @@ plotServer <- function(loc_data) {
                 class = "inline-flex",
                 radioButtons(
                   ns("weather_year"), "Weather year",
-                  choices = c(OPTS$weather_years, "All"),
-                  selected = cur_yr,
+                  choices = choices$year,
                   inline = T
                 ),
                 radioButtons(
                   ns("weather_smoothing"), "Data smoothing options",
-                  choices = OPTS$data_smoothing_choices,
+                  choices = choices$smoothing,
                   inline = T
                 ),
                 radioButtons(
                   ns("weather_gdd"), "Show growing degree days",
-                  choices = c("None", "Cumulative", "Daily"),
+                  choices = choices$gdd,
                   inline = T
                 )
               )
             )
           ),
-          div(
-            uiOutput(ns("weather_plot_title")),
-            plotlyOutput(ns("weather_plot"), height = "600px"),
-            div(class = "plot-caption", HTML("Click on any legend item in the plot to show or hide it. Weather data originally sourced from NOAA and retrieved from <a href='https://agweather.cals.wisc.edu/'>AgWeather</a>."))
-          )
-        )
-      })
-
-      ## weather_plot_title ----
-      output$weather_plot_title <- renderUI({
-        loc <- loc_data()$loc
-        smoothing <- req(input$weather_smoothing)
-        loc_text <- sprintf("for %.1f°N, %.1f°W", loc$lat, loc$lng)
-        prefix <- OPTS$plot_smoothing_prefix
-        h4(
-          style = "text-align: center;",
-          paste(prefix[[smoothing]], "weather", loc_text)
+          plotlyOutput(ns("weather_plot"), height = "600px"),
+          div(class = "plot-caption", HTML("Click on any legend item in the plot to show or hide it. Weather data originally sourced from NOAA and retrieved from <a href='https://agweather.cals.wisc.edu/'>AgWeather</a>. Click and drag on plot to zoom in, double-click to reset. Download with camera icon in plot menu."))
         )
       })
 
@@ -97,6 +87,10 @@ plotServer <- function(loc_data) {
           smoothing = req(input$weather_smoothing),
           gdd_type = req(input$weather_gdd)
         )
+        opts$title <- paste(
+          { if (opts$year != "All") opts$year else paste(rev(OPTS$weather_years), collapse = "-") },
+          sprintf("Weather data for %.1f°N, %.1f°W", opts$loc$lat, opts$loc$lng)
+        )
         df <- loc_data()$weather
 
         if (opts$year != "All") df <- filter(df, year == opts$year)
@@ -104,9 +98,25 @@ plotServer <- function(loc_data) {
 
         plt <- plot_ly() %>%
           layout(
+            title = list(
+              text = opts$title,
+              yanchor = "bottom"),
             legend = OPTS$plot_legend,
             xaxis = OPTS$plot_date_axis_weather,
-            hovermode = "x unified"
+            hovermode = "x unified",
+            margin = list(t = 50),
+            modebar = list(
+              remove = list("pan", "select", "lasso", "zoom", "autoscale")
+            )
+          ) %>%
+          config(
+            toImageButtonOptions = list(
+              format = "png",
+              filename = opts$title,
+              height = 600,
+              width = 1000,
+              scale = 1.25
+            )
           ) %>%
           add_temp_traces(df, "y1")
 
@@ -125,8 +135,6 @@ plotServer <- function(loc_data) {
 
       ## climate_ui ----
       output$climate_ui <- renderUI({
-        validate(need(loc_data()$loc, OPTS$location_validation_msg))
-
         tagList(
           bsCollapse(
             bsCollapsePanel(
@@ -152,37 +160,22 @@ plotServer <- function(loc_data) {
               )
             )
           ),
-          div(
-            uiOutput(ns("climate_plot_title")),
-            plotlyOutput(ns("climate_plot"), height = "600px"),
-            div(class = "plot-caption", HTML("Click on any legend item in the plot to show or hide it. Today's date is indicated as a vertical dashed line. Climate data sourced from <a href='https://www.climatologylab.org/gridmet.html'>GridMET</a>."))
-          )
-        )
-      })
-
-      ## climate_plot_title ----
-      output$climate_plot_title <- renderUI({
-        loc <- loc_data()$loc
-        period <- req(input$climate_period)
-        smoothing <- req(input$climate_smoothing)
-
-        loc_text <- sprintf("for %.1f°N, %.1f°W", loc$lat, loc$lng)
-        period_text <- OPTS$plot_period_prefix[[period]]
-        smoothing_text <- OPTS$plot_smoothing_prefix[[smoothing]]
-
-        h4(
-          style = "text-align: center;",
-          paste(smoothing_text, period_text, loc_text)
+          plotlyOutput(ns("climate_plot"), height = "600px"),
+          div(class = "plot-caption", HTML("Click on any legend item in the plot to show or hide it. Today's date is indicated as a vertical dashed line. Climate data sourced from <a href='https://www.climatologylab.org/gridmet.html'>GridMET</a>. Click and drag on plot to zoom in, double-click to reset. Download with camera icon in plot menu."))
         )
       })
 
       ## climate_plot ----
       output$climate_plot <- renderPlotly({
-        loc <- loc_data()$loc
         opts <- list(
+          loc = loc_data()$loc,
           period = req(input$climate_period),
           frost = req(input$climate_frost),
-          smoothing = req(input$climate_smoothing) %>% as.numeric()
+          smoothing = req(input$climate_smoothing)
+        )
+        opts$title <- paste(
+          OPTS$plot_period_prefix[[opts$period]],
+          sprintf("data for %.1f°N, %.1f°W", opts$loc$lat, opts$loc$lng)
         )
 
         df <- loc_data()[[opts$period]] %>%
@@ -191,9 +184,24 @@ plotServer <- function(loc_data) {
 
         plt <- plot_ly() %>%
           layout(
+            title = list(
+              text = opts$title,
+              yanchor = "bottom"),
             legend = OPTS$plot_legend,
             xaxis = OPTS$plot_date_axis_climate,
-            hovermode = "x unified"
+            hovermode = "x unified",
+            margin = list(t = 50),
+            modebar = list(
+              remove = list("pan", "select", "lasso", "zoom", "autoscale"))
+          ) %>%
+          config(
+            toImageButtonOptions = list(
+              format = "png",
+              filename = opts$title,
+              height = 600,
+              width = 1000,
+              scale = 1.25
+            )
           ) %>%
           add_today() %>%
           add_temp_traces(df, "y1")
@@ -242,11 +250,8 @@ plotServer <- function(loc_data) {
             ),
             open = "Plot options"
           ),
-          div(
-            uiOutput(ns("custom_plot_title")),
-            plotlyOutput(ns("custom_plot"), height = "600px"),
-            div(class = "plot-caption", HTML("Click on any legend item in the plot to show or hide it. Today's date is indicated as a vertical dashed line. Weather data originally sourced from NOAA and retrieved from <a href='https://agweather.cals.wisc.edu'>AgWeather</a>, climate data sourced from <a href='https://www.climatologylab.org/gridmet.html'>GridMET</a>."))
-          )
+          plotlyOutput(ns("custom_plot"), height = "600px"),
+          div(class = "plot-caption", HTML("Click on any legend item in the plot to show or hide it. Today's date is indicated as a vertical dashed line. Weather data originally sourced from NOAA and retrieved from <a href='https://agweather.cals.wisc.edu'>AgWeather</a>, climate data sourced from <a href='https://www.climatologylab.org/gridmet.html'>GridMET</a>. Click and drag on plot to zoom in, double-click to reset. Download with camera icon in plot menu."))
         )
       })
 
@@ -289,13 +294,6 @@ plotServer <- function(loc_data) {
         })
       })
 
-      ## custom_plot_title ----
-      output$custom_plot_title <- renderUI({
-        loc <- loc_data()$loc
-        title <- sprintf("Weather/climate data for %.1f°N, %.1f°W", loc$lat, loc$lng)
-        h4(title, style = "text-align: center;")
-      })
-
       ## custom_plot ----
       make_trace_label <- function(opts) {
         type <- str_to_sentence(opts$data)
@@ -308,7 +306,7 @@ plotServer <- function(loc_data) {
           if (opts$smoothing != 1) paste0(opts$smoothing, "-day")
         ), collapse = ", ")
         if (info != "") info <- paste0("(", info, ")")
-        paste0(type, info, ": ")
+        paste0(paste(type, info), ": ")
       }
 
       output$custom_plot <- renderPlotly({
@@ -338,12 +336,30 @@ plotServer <- function(loc_data) {
           elems$y2 <- "none"
         }
 
+        opts <- list(loc = req(rv$loc))
+        opts$title <- sprintf("Weather/climate data for %.1f°N, %.1f°W", opts$loc$lat, opts$loc$lng)
+
         # base plot
         plt <- plot_ly() %>%
           layout(
+            title = list(
+              text = opts$title,
+              yanchor = "bottom"),
             legend = OPTS$plot_legend,
             xaxis = OPTS$plot_date_axis_climate,
-            hovermode = "x unified"
+            hovermode = "x unified",
+            margin = list(t = 50),
+            modebar = list(
+              remove = list("pan", "select", "lasso", "zoom", "autoscale"))
+          ) %>%
+          config(
+            toImageButtonOptions = list(
+              format = "png",
+              filename = opts$title,
+              height = 600,
+              width = 1000,
+              scale = 1.25
+            )
           )
 
         # add traces as necessary

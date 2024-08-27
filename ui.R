@@ -16,8 +16,6 @@ ui <- navbarPage(
       useShinyjs(),
       tags$script(src = "script.js"),
       includeHTML("www/google-analytics.html"),
-      # tags$script(src = "html2canvas.min.js"),
-      # tags$script(src = "saveAs.js")
     ),
     div(
       style = "min-height: 750px; margin: 0 20px;",

@@ -149,12 +149,12 @@ OPTS <- list(
     "Weather vs climate" = "comparison"
   ),
   climate_period_choices = list(
-    "10-year average (2013-2023)" = "c10",
-    "5-year average (2018-2023)" = "c5"
+    "10-year climate average (2013-2023)" = "c10",
+    "5-year climate average (2018-2023)" = "c5"
   ),
   plot_period_prefix = list(
-    "c10" = "10-year average (2013-2023)",
-    "c5" = "5-year average (2018-2023)"
+    "c10" = "10-year climate average (2013-2023)",
+    "c5" = "5-year climate average (2018-2023)"
   ),
   climate_frost_choices = list(
     "Frost (<32°F)" = "frost",
@@ -189,12 +189,14 @@ OPTS <- list(
   # plotly settings
   plot_date_axis_climate = list(
     title = "Date",
-    dtick = "M1", tickformat = "%b",
+    dtick = "M1",
+    tickformat = "%b",
     hoverformat = "%b %d (day %j)",
     domain = c(0, .95)),
   plot_date_axis_weather = list(
     title = "Date",
-    dtick = "M1", tickformat = "%b",
+    dtick = "M1",
+    tickformat = "%b",
     hoverformat = "%b %d, %Y (day %j)",
     domain = c(0, .95)),
   plot_legend = list(
@@ -258,6 +260,29 @@ OPTS <- list(
 )
 
 
+## UI builders ----
+
+withSpinnerProxy <- function(ui, ...) {
+  ui %>% shinycssloaders::withSpinner(type = 8, color = "#30a67d", proxy.height = "400px", ...)
+}
+
+buildPlotDlBtn <- function(id, fname, text = "Download plot image") {
+  print(id)
+  cmd <- paste0("this.disable; html2canvas(document.querySelector('", id, "'), {scale: 3}).then(canvas => {saveAs(canvas.toDataURL(), '", fname, "')}); this.enable;")
+  p(
+    class = "plot-caption",
+    style = "margin: 15px;",
+    align = "center",
+    a(
+      class = "btn btn-default btn-sm",
+      style = "cursor: pointer;",
+      onclick = cmd,
+      text
+    )
+  )
+}
+
+
 ## Helper functions ----
 
 # converts the incoming json coordinates in the form '[lat, lng]' to cols
@@ -298,10 +323,6 @@ parse_coords <- function(str) {
   ))
   if (any(sapply(coords, is.na))) stop("Failed to parse coordinates.")
   coords
-}
-
-withSpinnerProxy <- function(ui, ...) {
-  ui %>% shinycssloaders::withSpinner(type = 8, color = "#30a67d", proxy.height = "400px", ...)
 }
 
 add_climate_cols <- function(.data) {

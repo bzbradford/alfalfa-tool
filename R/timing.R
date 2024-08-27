@@ -21,7 +21,8 @@ timingServer <- function(loc_data) {
         c5 = NULL,
         initial_cut_dates = NULL,
         set_cut_dates = NULL,
-        date_ui_ready = FALSE
+        date_ui_ready = FALSE,
+        plot_export_ready = TRUE
       )
 
       # store incoming location data in rv
@@ -61,9 +62,8 @@ timingServer <- function(loc_data) {
 
         tagList(
           uiOutput(ns("options_ui")),
-          uiOutput(ns("plot_title")),
           plotlyOutput(ns("plot"), height = "500px"),
-          div(class = "plot-caption", HTML("Today's date is indicated as a vertical dashed line. Future degree-day accumulation estimated based on climate average GDD/day. Green zone represents optimal cut timing (900-1100 GDD since last cutting), blue zone (0-360 GDD) represents acceptable grow-back since last cut and before first freeze. Ideally alfalfa should not be allowed to grow outside of this zone after the last fall cutting."))
+          div(class = "plot-caption", HTML("Today's date is indicated as a vertical dashed line. Future degree-day accumulation estimated based on climate average GDD/day. Green zone represents optimal cut timing (900-1100 GDD since last cutting), blue zone (0-360 GDD) represents acceptable grow-back since last cut and before first freeze. Ideally alfalfa should not be allowed to grow outside of this zone after the last fall cutting. Click and drag on plot to zoom in, double-click to reset. Download with camera icon in plot menu."))
         )
       })
 
@@ -233,15 +233,6 @@ timingServer <- function(loc_data) {
       })
 
 
-      ## Plot title ----
-
-      output$plot_title <- renderUI({
-        loc <- req(rv$loc)
-        title <- sprintf("Full-season alfalfa cut and kill schedule for %.1f°N, %.1f°W", loc$lat, loc$lng)
-        h4(title, align = "center")
-      })
-
-
       # Plot data ----
 
       weather_data <- reactive({
@@ -289,6 +280,9 @@ timingServer <- function(loc_data) {
         opts <- list()
         opts$year <- req(input$year)
         opts$climate = req(input$period)
+        opts$loc <- req(rv$loc)
+        opts$title <- sprintf("%s Alfalfa cutting schedule for %.1f°N, %.1f°W", opts$year, opts$loc$lat, opts$loc$lng)
+
         df <- req(rv$plot_data) %>%
           filter(yday > 31)
         cl <- req(rv[[opts$climate]]) %>%
@@ -389,23 +383,27 @@ timingServer <- function(loc_data) {
             line = list(color = "purple", width = 1.5)
           ) %>%
           add_annotations(
-            data = cut_annot, x = ~date, y = ~gdd_since_cut, text = ~label,
+            data = cut_annot,
+            x = ~date, y = ~gdd_since_cut, text = ~label,
             arrowsize = .5,
             font = list(size = 10)
           ) %>%
           add_annotations(
-            data = kill_annot, x = ~date, y = ~gdd_since_cut, text = ~label,
+            data = kill_annot,
+            x = ~date, y = ~gdd_since_cut, text = ~label,
             arrowsize = .5,
             font = list(size = 10)
           ) %>%
           layout(
             legend = OPTS$plot_legend,
+            title = list(
+              text = opts$title,
+              yanchor = "bottom"),
             xaxis = OPTS$plot_date_axis_weather,
             yaxis = list(
               title = "Growing degree days (base 41°F)",
               fixedrange = T,
-              range = c(0, NA)
-            ),
+              range = c(0, 5000)),
             yaxis2 = list(
               title = "Cumul. killing freeze prob. (<24°F)",
               overlaying = "y",
@@ -413,9 +411,20 @@ timingServer <- function(loc_data) {
               zeroline = F,
               showgrid = F,
               fixedrange = T,
-              range = c(0, 100)
-            ),
-            hovermode = "x unified"
+              range = c(0, 100)),
+            hovermode = "x unified",
+            margin = list(t = 50),
+            modebar = list(
+              remove = list("pan", "select", "lasso", "zoom", "autoscale"))
+          ) %>%
+          config(
+            toImageButtonOptions = list(
+              format = "png",
+              filename = opts$title,
+              height = 600,
+              width = 1000,
+              scale = 1.25
+            )
           )
 
         cut_zones <- list(
@@ -426,7 +435,6 @@ timingServer <- function(loc_data) {
 
         plt %>% add_today(yr = opts$year, date_yr = opts$year, other_shapes = cut_zones)
       })
-
 
     } # end module
   )
