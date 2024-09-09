@@ -25,16 +25,24 @@ body {
   max-height: min(90vh, 120vw);
 }
 
-.map-title {
+.map-title-container {
   position: absolute;
   text-align: center;
+  display: flex;
+  justify-content: center;
   width: 100%;
-  font-weight: bold;
-  font-size: 20px;
   margin-top: 10px;
   z-index: 999;
 }
 
+.map-title {
+  border: 1px solid rgba(0, 0, 0, .25);
+  border-radius: 5px;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, .8);
+  font-size: 20;
+  font-weight: bold;
+}
 
 .leaflet-control-attribution {
   display: none;
@@ -60,6 +68,21 @@ a, a:hover, a:focus {
   border-radius: 5px !important;
 }
 
+
+/* Progress bar */
+
+.shiny-notification {
+  width: 500px;
+  position: fixed;
+  top: calc(50%);
+  left: calc(50% - 250px);
+  font-size: large;
+  text-align: center;
+}
+
+.shiny-notification-close {
+  display: none;
+}
 
 
 /* new classes */
@@ -123,11 +146,10 @@ a, a:hover, a:focus {
 }
 
 .shiny-output-error-validation {
-  border: 1px solid rgba(255, 0, 0, .54);
+  border: 1px solid rgb(39, 128, 227);
   border-radius: 5px;
   margin: 20px 0px;
   padding: 10px;
-  background: rgba(255, 0, 0, .05);
-  font-style: italic;
+  background: rgb(236, 244, 252);
   color: #222;
 }

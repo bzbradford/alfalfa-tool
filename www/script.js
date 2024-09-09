@@ -1,8 +1,11 @@
-const BOUNDS = {
-  north: 47.1,
-  south: 42.4,
-  east: -86.8,
-  west: -93.0
+const WI_BOUNDS = {
+  south: 42.4, north: 47.1,
+  west: -93.0, east: -86.8,
+}
+
+const MW_BOUNDS = {
+  south: 38.0, north: 49.4,
+  west: -98.0, east: -82.0,
 }
 
 // callback for google location searchbox
@@ -10,10 +13,10 @@ function initAutocomplete() {
   const searchbox = document.getElementById('map-searchbox');
   const opts = {
     types: ['geocode'],
-    bounds: BOUNDS,
+    bounds: WI_BOUNDS,
     strictBounds: true,
   }
-  const autocomplete = new google.maps.places.Autocomplete(searchbox, opts);
+  autocomplete = new google.maps.places.Autocomplete(searchbox, opts);
 
   autocomplete.setFields(['geometry']);
   autocomplete.addListener('place_changed', function() {

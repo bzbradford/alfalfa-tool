@@ -2,6 +2,7 @@
 # Ben Bradford, UW-Madison
 
 
+options(rsconnect.max.bundle.size = 5e9)
 
 #- Renv ----
 
@@ -17,8 +18,3 @@
 
 # shiny::devmode(TRUE)
 # shiny::devmode(FALSE)
-
-
-#- Run ----
-
-shiny::shinyApp(ui, server, enableBookmarking = "url")

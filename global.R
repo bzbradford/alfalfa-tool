@@ -4,7 +4,7 @@ suppressMessages({
   # library(rlang) # walrus operator
   library(tidyverse) # core
   library(sf) # spatial
-  library(feather) # file storage
+  library(fst) # file storage
   library(shiny)
   library(shinyBS) # bscollapse
   library(shinyjs) # javascript
@@ -17,6 +17,7 @@ suppressMessages({
   library(leaflet.extras) # map JS buttons
   library(plotly) # plots
   library(markdown) #includeMarkdown
+  library(RColorBrewer)
 })
 
 
@@ -34,20 +35,14 @@ make_date <- function(y, m, d) {
 
 # accepts date or year
 start_of_year <- function(d = Sys.Date()) {
-  if (is.Date(d)) {
-    make_date(year(d), 1, 1)
-  } else {
-    make_date(d, 1, 1)
-  }
+  if (is.Date(d)) d <- year(d)
+  make_date(d, 1, 1)
 }
 
 # accepts date or year
 end_of_year <- function(d = Sys.Date()) {
-  if (is.Date(d)) {
-    make_date(year(d), 12, 31)
-  } else {
-    make_date(d, 12, 31)
-  }
+  if (is.Date(d)) d <- year(d)
+  make_date(d, 12, 31)
 }
 
 align_dates <- function(target_date, ref_date) {
@@ -126,11 +121,29 @@ google_key <- Sys.getenv("google_places_key")
 # style <- read_file("www/style.css") %>% str_replace_all("[\r\n]", " ")
 cur_yr <- year(yesterday())
 OPTS <- list(
+  # leaflet color palette
+  factor_colors = {
+    qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+    unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
+  },
+
+  # zoom 7 for wi, 6 for mw
+  map_center = list(
+    wi = c(44.8, -90),
+    mw = c(44, -90)
+  ),
+
   # map extents
-  min_lat = 42.4,
-  max_lat = 47.1,
-  min_lng = -93.0,
-  max_lng = -86.8,
+  map_extent = list(
+    wi = list(
+      lat = c(42.4, 47.1),
+      lng = c(-93.0, -86.8)
+    ),
+    mw = list(
+      lat = c(38, 49.4),
+      lng = c(-98, -82)
+    )
+  ),
 
   # interface settings
   weather_years = c(cur_yr, cur_yr - 1),
@@ -310,9 +323,11 @@ pt_to_coords <- function(pt) {
   )
 }
 
-in_extent <- function(lat, lng) {
-  between(lat, OPTS$min_lat, OPTS$max_lat) &
-    between(lng, OPTS$min_lng, OPTS$max_lng)
+# extent may be 'wi' or 'mw'
+in_extent <- function(lat, lng, extent = "wi") {
+  extent <- OPTS$map_extent[[extent]]
+  between(lat, extent$lat[1], extent$lat[2]) &
+    between(lng, extent$lng[1], extent$lng[2])
 }
 
 parse_coords <- function(str) {
@@ -338,7 +353,8 @@ add_climate_cols <- function(.data) {
       gdd50cum = cumsum(gdd50),
       .by = c(lat, lng),
       .after = gdd50
-    )
+    ) %>%
+    mutate(inwi = in_extent(lat, lng))
 }
 
 smooth_cols <- function(.data, width, cols = OPTS$smoothable_cols) {
@@ -352,7 +368,7 @@ smooth_cols <- function(.data, width, cols = OPTS$smoothable_cols) {
 
 remove_weather_cols <- function(.data) {
   drop_cols <- c("year", "yday", "mean_temp", "frost", "freeze", "kill", "gdd41cum", "gdd50cum")
-  .data %>% select(-all_of(drop_cols))
+  .data %>% select(-any_of(drop_cols))
 }
 
 add_weather_cols <- function(.data) {
@@ -364,7 +380,8 @@ add_weather_cols <- function(.data) {
       mean_temp = rowMeans(pick(min_temp, max_temp)),
       frost = min_temp <= 32,
       freeze = min_temp <= 28,
-      kill = min_temp <= 24
+      kill = min_temp <= 24,
+      inwi = in_extent(lat, lng)
     ) %>%
     mutate(
       gdd41cum = cumsum(gdd41),
@@ -375,12 +392,7 @@ add_weather_cols <- function(.data) {
 
 # units: temp=F, pressure=kPa, rh=%
 get_weather_grid <- function(d = yesterday()) {
-  url <- paste0(
-    "https://agweather.cals.wisc.edu/api/weather/grid",
-    "?lat_range=", OPTS$min_lat, ",", OPTS$max_lat,
-    "&long_range=", OPTS$min_lng, ",", OPTS$max_lng,
-    "&date=", d
-  )
+  url <- paste0("https://agweather.cals.wisc.edu/api/weather/grid?date=", d)
   message(d, " ==> GET ", url)
   resp <- httr::GET(url) %>% httr::content()
   data <- resp$data %>%
@@ -408,50 +420,54 @@ weather_dates <- function() {
   as.character(dates_need[!(dates_need %in% dates_have)])
 }
 
-# downloads and saves missing daily weather from AgWeather
-fill_weather <- function(dates = weather_dates()) {
-  if (length(dates) == 0) {
-    message("Everything up to date. Nothing to do.")
-  } else {
-    for (d in dates) {
-      wx <- get_weather_grid(d)
-      if (!exists("weather")) {
-        weather <<- wx
-      } else {
-        weather <<- bind_rows(weather, wx)
-      }
-    }
-  }
-
-  # save minimal dataset
-  weather %>%
-    remove_weather_cols() %>%
-    write_feather("data/weather.feather")
-
-  # build additional cols
-  weather <<- weather %>% add_weather_cols()
-}
-
 
 # Initialize data ----
 
 list.files("R", "*.R", full.names = T) %>% sapply(source)
 
-counties <- read_rds("data/counties.rds")
+if (!exists("counties_wi")) {
+  counties_wi <- read_rds("data/counties-wi.rds") %>%
+    mutate(
+      label = paste0("<b>", county, " County</b><br>", dnr_region) %>%
+        lapply(shiny::HTML)
+    )
+}
+
+if (!exists("counties_mw")) {
+  counties_mw <- read_rds("data/counties-mw.rds") %>%
+    mutate(
+      label = paste0("<b>", state, "</b><br>", county, " County") %>%
+        lapply(shiny::HTML)
+    )
+}
+
 
 if (!exists("climate")) {
-  climate <- read_rds("data/climate.rds") %>% lapply(add_climate_cols)
+  climate <- list(
+    c5 = read_fst("climate/climate_5yr.fst") %>% as_tibble(),
+    c10 = read_fst("climate/climate_10yr.fst") %>% as_tibble()
+  ) %>% lapply(add_climate_cols)
   climate_grids <- climate$c10 %>% distinct(lat, lng)
 }
 
-if (file.exists("data/weather.feather")) {
+wx_files <- list.files(path = "./data", pattern = "^weather-.*\\.fst$", full.names = T)
+if (length(wx_files) > 0) {
   if (!exists("weather") || max(weather$date) != yesterday()) {
-    weather <- read_feather("data/weather.feather") %>%
+    weather <- wx_files %>%
+      lapply(read_fst) %>%
+      bind_rows() %>%
+      as_tibble() %>%
       inner_join(climate_grids, join_by(lat, lng)) %>%
+      arrange(lat, lng, date) %>%
       add_weather_cols()
   }
 }
 
+
+
+
+
 # delete some weather for testing
 # weather <- weather %>% filter(date < Sys.Date() - 3)
-# weather %>% write_feather("data/weather.feather")
+# weather %>% write.fst("data/weather.fst")
+

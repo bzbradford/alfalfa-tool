@@ -6,14 +6,16 @@ mapUI <- function() {
   div(
     div(
       style = "margin-bottom: 10px;",
-      div(class = "map-title", uiOutput(ns("map_title"))),
+      div(class = "map-title-container", uiOutput(ns("map_title"))),
       leafletOutput(ns("map"), width = "100%", height = "750px")
     ),
+    uiOutput(ns("map_extent_ui")),
     fluidRow(
       column(6, uiOutput(ns("searchbox_ui"))),
       column(6, uiOutput(ns("coord_search_ui")))
-    ),
-    uiOutput(ns("lat_lng_ui"))
+    )
+    # ,
+    # uiOutput(ns("lat_lng_ui"))
   )
 }
 
@@ -40,8 +42,22 @@ mapServer <- function() {
         date_vals = NULL
       )
 
+      weather_data <- reactive({
+        extent <- req(input$map_extent)
+        if (extent == "wi") filter(weather, inwi) else weather
+      })
 
-      # SIDEBAR ----------------------------------------------------------------
+      climate_data <- reactive({
+        extent <- req(input$map_extent)
+        if (extent == "wi") {
+          lapply(climate, function(df) filter(df, inwi))
+        } else {
+          climate
+        }
+      })
+
+
+      # SIDEBAR UI -------------------------------------------------------------
 
       ## Clear map grid on type change ----
       observeEvent(input$data_type, {
@@ -372,8 +388,8 @@ mapServer <- function() {
       }
 
       layers <- list(
-        counties = "Counties/Regions",
-        grid = "Data grid"
+        grid = "Data grid",
+        counties = "Counties/Regions"
       )
 
 
@@ -383,25 +399,27 @@ mapServer <- function() {
         opts <- grid_data()$opts
         cols <- OPTS$grid_cols[[opts$type]]
         title <- setNames(names(cols), cols)[[opts$col]]
-        datestr <- paste(format(opts$date, "%b %d"), collapse = "-")
-        title <- paste0(title, " - ", datestr)
+        date_fmt <- ifelse(opts$type == "climate", "%b %d", "%b %d, %Y")
+        date_str <- paste(format(opts$date, date_fmt), collapse = "-")
+        title <- paste0(title, " - ", date_str)
         if (opts$smoothing != 1) {
           title <- paste0(title, " - ", opts$smoothing, "-day average")
         }
-        title
+        div(class = "map-title", title)
       })
 
 
       ## Initialize map ----
 
+      fit_extent <- function(map, extent) {
+        zoom <- ifelse(extent == "wi", 7, 6)
+        center <- OPTS$map_center[[extent]]
+        setView(map, lat = center[1], lng = center[2], zoom = zoom)
+      }
+
       output$map <- renderLeaflet({
-        leaflet() %>%
-          fitBounds(
-            lat1 = 42.4,
-            lat2 = 47.1,
-            lng1 = -92.9,
-            lng2 = -86.8
-          ) %>%
+        leaflet(options = leafletOptions(preferCanvas = T)) %>%
+          fit_extent("wi") %>%
           addBasemaps() %>%
           addMapPane("counties", 410) %>%
           addMapPane("grid", 420) %>%
@@ -418,9 +436,17 @@ mapServer <- function() {
               title = "Show my location on the map",
               onClick = JS("
                 function(btn, map) {
-                  map.locate({ setView: false }).on('locationfound', (event) => {
-                    Shiny.setInputValue('map-user_loc', event.latlng, {priority: 'event'})
-                  })
+                  Shiny.setInputValue('map-easy_btn', 'user_loc', {priority: 'event'});
+                }
+              ")
+            ),
+            easyButton(
+              position = "topleft",
+              icon = "fa-magnifying-glass",
+              title = "Zoom to selected grid",
+              onClick = JS("
+                function(btn, map) {
+                  Shiny.setInputValue('map-easy_btn', 'zoom_grid', {priority: 'event'});
                 }
               ")
             ),
@@ -430,29 +456,58 @@ mapServer <- function() {
               title = "Reset map view",
               onClick = JS("
                 function(btn, map) {
-                  map.fitBounds([[47.1, -86.8], [42.4, -93.0]])
+                  Shiny.setInputValue('map-easy_btn', 'zoom_extent', {priority: 'event'});
                 }
               ")
             )
           ) %>%
+          # assign leaflet map object to global var 'map'
+          htmlwidgets::onRender("() => { map = this; }") %>%
           suspendScroll(
             sleepTime = 0,
             wakeTime = 1000,
             hoverToWake = T,
             sleepNote = F,
             sleepOpacity = 1
-          ) %>%
-          addPolygons(
-            data = counties,
-            group = layers$counties,
-            label = ~ lapply(paste0("<b>", CountyName, " County</b><br>", DnrRegion), HTML),
-            fillOpacity = 0.1,
-            color = "grey",
-            opacity = 0.5,
-            fillColor = ~ colorFactor("Dark2", counties$DnrRegion)(DnrRegion),
-            weight = 1,
-            options = pathOptions(pane = "counties")
           )
+      })
+
+
+      ## Add counties to map ----
+
+      observe({
+        extent <- req(input$map_extent)
+        map <- leafletProxy("map")
+
+        if (extent == "wi") {
+          map %>%
+            clearGroup(layers$counties) %>%
+            addPolygons(
+              data = counties_wi,
+              group = layers$counties,
+              label = ~label,
+              color = "grey",
+              weight = 0.5,
+              opacity = 0.5,
+              fillColor = ~colorFactor("Dark2", dnr_region)(dnr_region),
+              fillOpacity = 0.05,
+              options = pathOptions(pane = "counties")
+            )
+        } else {
+          map %>%
+            clearGroup(layers$counties) %>%
+            addPolygons(
+              data = counties_mw,
+              group = layers$counties,
+              label = ~label,
+              color = "grey",
+              weight = 0.5,
+              opacity = 0.25,
+              fillColor = ~colorFactor(OPTS$factor_colors, state)(state),
+              fillOpacity = 0.1,
+              options = pathOptions(pane = "counties")
+            )
+        }
       })
 
 
@@ -469,35 +524,63 @@ mapServer <- function() {
       })
 
 
+      ## Handle EasyButton clicks ----
+
+      observeEvent(input$easy_btn, {
+        btn <- req(input$easy_btn)
+
+        if (btn == "user_loc") {
+          runjs("
+            map.getMap().locate({ setView: false }).on('locationfound', (event) => {
+              Shiny.setInputValue('map-user_loc', event.latlng, {priority: 'event'})
+            })
+          ")
+        } else if (btn == "zoom_grid") {
+          loc <- req(rv$selected_grid)
+          runjs(paste0(
+            "map.getMap().setView([", loc$lat, ",", loc$lng, "], 10);"
+          ))
+        } else if (btn == "zoom_extent") {
+          extent <- req(input$map_extent)
+          zoom <- if (extent == "wi") 7 else 6
+          runjs(paste0(
+            "map.getMap().setView([45, -90], ", zoom, ");"
+          ))
+        }
+      })
+
+
       # MAP GRID ---------------------------------------------------------------
 
       ## Grid helpers ----
 
       # handle filtering by date for weather data
-      prepare_weather_grid_data <- function(df, col, dt, smoothing) {
-        df <- df %>% select(all_of(c("lat", "lng", "date", "value" = col)))
-        df1 <- if (smoothing > 1 & (col %in% OPTS$smoothable_cols)) {
+      prepare_weather_grid_data <- function(opts) {
+        df <- weather_data() %>%
+          select(all_of(c("lat", "lng", "date", "value" = opts$col)))
+        df1 <- if (opts$smoothing > 1 & (opts$col %in% OPTS$smoothable_cols)) {
           df %>%
-            filter(between(date, dt[1] - smoothing / 2, dt[1] + smoothing / 2)) %>%
+            filter(between(date, opts$date[1] - opts$smoothing / 2, opts$date[1] + opts$smoothing / 2)) %>%
             summarize(value = mean(value), .by = c(lat, lng))
-        } else filter(df, date == dt[1])
-        df2 <- if (length(dt) == 2) filter(df, date == dt[2])
-        prepare_grid_data(df1, df2, col)
+        } else filter(df, date == opts$date[1])
+        df2 <- if (length(opts$date) == 2) filter(df, date == opts$date[2])
+        prepare_grid_data(df1, df2, opts$col)
       }
 
       # handle filtering by day of year for climate data
-      prepare_climate_grid_data <- function(df, col, dt, smoothing) {
-        df <- df %>% select(all_of(c("lat", "lng", "yday", "value" = col)))
-        df1 <- if (smoothing > 1) {
+      prepare_climate_grid_data <- function(opts) {
+        df <- climate_data()[[opts$period]] %>%
+          select(all_of(c("lat", "lng", "yday", "value" = opts$col)))
+        df1 <- if (opts$smoothing > 1) {
           df %>%
-            filter(between(yday, yday(dt[1] - smoothing / 2), yday(dt[1] + smoothing / 2))) %>%
+            filter(between(yday, yday(opts$date[1] - opts$smoothing / 2), yday(opts$date[1] + opts$smoothing / 2))) %>%
             summarize(value = mean(value), .by = c(lat, lng))
         } else {
-          df %>% filter(yday == yday(dt[1]))
+          df %>% filter(yday == yday(opts$date[1]))
         }
-        df2 <- if (length(dt) == 2) df %>% filter(yday == yday(dt[2]))
+        df2 <- if (length(opts$date) == 2) df %>% filter(yday == yday(opts$date[2]))
 
-        prepare_grid_data(df1, df2, col)
+        prepare_grid_data(df1, df2, opts$col)
       }
 
       # returns a minimal dataset with lat, lng, and value cols
@@ -561,20 +644,14 @@ mapServer <- function() {
         # set grid data
         grid <-
           if (opts$type == "weather") {
-            weather %>%
-              prepare_weather_grid_data(opts$col, opts$date, opts$smoothing)
+            prepare_weather_grid_data(opts)
           } else if (opts$type == "climate") {
             opts$period <- req(input$climate_period)
-            climate[[opts$period]] %>%
-              prepare_climate_grid_data(opts$col, opts$date, opts$smoothing)
+            prepare_climate_grid_data(opts)
           } else if (opts$type == "comparison") {
             opts$period <- req(input$climate_period)
-            wx <- weather %>%
-              prepare_weather_grid_data(opts$col, opts$date, opts$smoothing) %>%
-              rename(c(wx_value = value))
-            cl <- climate[[opts$period]] %>%
-              prepare_climate_grid_data(opts$col, opts$date, opts$smoothing) %>%
-              rename(c(cl_value = value))
+            wx <- prepare_weather_grid_data(opts) %>% rename(c(wx_value = value))
+            cl <- prepare_climate_grid_data(opts) %>% rename(c(cl_value = value))
             cl %>%
               left_join(wx, join_by(lat, lng)) %>%
               mutate(value = wx_value - cl_value)
@@ -666,7 +743,8 @@ mapServer <- function() {
 
       # selects only if within bounds
       select_grid <- function(lat, lng) {
-        if (in_extent(lat, lng)) {
+        extent <- req(input$map_extent)
+        if (in_extent(lat, lng, extent)) {
           rv$selected_grid <- list(
             lat = round(lat, 1),
             lng = round(lng, 1)
@@ -773,8 +851,69 @@ mapServer <- function() {
       })
 
 
-      # SEARCHBOX --------------------------------------------------------------
+      # LOWER UI ---------------------------------------------------------------
 
+      ## map_extent_ui ----
+      output$map_extent_ui <- renderUI({
+        div(
+          class = "inline-flex",
+          style = "align-items: center;",
+          div(
+            style = "margin-bottom: 10px;",
+            tags$label("Map extent:")
+          ),
+          radioGroupButtons(
+            ns("map_extent"), label = NULL,
+            choices = list(
+              "Wisconsin" = "wi",
+              "Upper Midwest" = "mw"
+            ),
+            size = "sm"
+          )
+        )
+      })
+
+      observeEvent(input$map_extent, {
+        extent <- req(input$map_extent)
+        bounds <- OPTS$map_extent[[extent]]
+
+        leafletProxy("map") %>%
+          fit_extent(extent) %>%
+          clearGroup(layers$grid)
+        # %>%
+        #   addRectangles(
+        #     lat1 = bounds$lat[1] - .05,
+        #     lat2 = bounds$lat[2] + .05,
+        #     lng1 = bounds$lng[1] - .05,
+        #     lng2 = bounds$lng[2] + .05,
+        #     color = "black",
+        #     weight = 1,
+        #     opacity = .25,
+        #     fillOpacity = 0,
+        #     layerId = "extent"
+        #   )
+
+        # move selection if now outside of extent
+        if (!is.null(rv$selected_grid)) {
+          loc <- rv$selected_grid
+          if (!in_extent(loc$lat, loc$lng, extent)) {
+            rv$selected_grid <- list(
+              lat = clamp(loc$lat, bounds$lat[1], bounds$lat[2]),
+              lng = clamp(loc$lng, bounds$lng[1], bounds$lng[2])
+            )
+          }
+        }
+
+        # update bounds on google places search
+        if (extent == "wi") {
+          runjs("autocomplete.setBounds(WI_BOUNDS);")
+        } else {
+          runjs("autocomplete.setBounds(MW_BOUNDS);")
+        }
+      })
+
+
+      ## searchbox_ui ----
       output$searchbox_ui <- renderUI({
         div(
           HTML(paste0("<script async src='https://maps.googleapis.com/maps/api/js?key=", google_key, "&loading=async&libraries=places&callback=initAutocomplete'></script>")),
@@ -782,6 +921,7 @@ mapServer <- function() {
         )
       })
 
+      ## coord_search_ui ----
       output$coord_search_ui <- renderUI({
         runjs('
           $(document).keyup((event) => {
@@ -790,8 +930,9 @@ mapServer <- function() {
             }
           });
         ')
+
         div(
-          tags$label("Find a location by coordinates"),
+          div(tags$label("Find a location by coordinates")),
           div(
             style = "display: inline-flex; gap: 5px; max-width: 100%;",
             textInput(
@@ -816,6 +957,7 @@ mapServer <- function() {
         })
       })
 
+      ## lat_lng_ui ----
       # show selected grid below map
       output$lat_lng_ui <- renderUI({
         loc <- rv$selected_grid
@@ -823,6 +965,7 @@ mapServer <- function() {
 
         div(strong("Currently selected location:"), msg)
       })
+
 
 
       # RETURN -----------------------------------------------------------------
