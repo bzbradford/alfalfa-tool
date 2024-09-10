@@ -13,12 +13,13 @@ server <- function(input, output, session) {
       for (d in dates) {
         if (!exists("weather")) weather <<- tibble()
         wx <- get_weather_grid(d)
+        incProgress(.5)
         weather <<- bind_rows(weather, wx)
         weather %>%
           filter(date >= start_of_year(as_date(d))) %>%
           remove_weather_cols() %>%
           write_fst(str_glue("data/weather-{year(d)}.fst"), compress = 99)
-        incProgress(1)
+        incProgress(.5)
       }
     }, min = 0, max = length(dates), value = 0, message = msg)
 

@@ -444,9 +444,11 @@ if (!exists("counties_mw")) {
 
 if (!exists("climate")) {
   climate <- list(
-    c5 = read_fst("climate/climate_5yr.fst") %>% as_tibble(),
-    c10 = read_fst("climate/climate_10yr.fst") %>% as_tibble()
-  ) %>% lapply(add_climate_cols)
+    c5 = read_fst("climate/climate_5yr.fst"),
+    c10 = read_fst("climate/climate_10yr.fst")
+  ) %>%
+    lapply(as_tibble) %>%
+    lapply(add_climate_cols)
   climate_grids <- climate$c10 %>% distinct(lat, lng)
 }
 
@@ -464,8 +466,15 @@ if (length(wx_files) > 0) {
 }
 
 
+# App cleanup ----
+
+# removes all objects from the environment on app shutdown
+onStop(
+  function() { rm(list = ls(all.names = TRUE)) }
+)
 
 
+# Testing ----
 
 # delete some weather for testing
 # weather <- weather %>% filter(date < Sys.Date() - 3)

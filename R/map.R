@@ -14,8 +14,6 @@ mapUI <- function() {
       column(6, uiOutput(ns("searchbox_ui"))),
       column(6, uiOutput(ns("coord_search_ui")))
     )
-    # ,
-    # uiOutput(ns("lat_lng_ui"))
   )
 }
 
@@ -149,31 +147,28 @@ mapServer <- function() {
 
       output$weather_value_ui <- renderUI({
         choices <- OPTS$grid_cols$weather
-        radioGroupButtons(
+        selectInput(
           ns("weather_value"), "Display value",
           choices = choices,
-          selected = coalesce(input$weather_value, first(choices)),
-          size = "sm"
+          selected = coalesce(input$weather_value, first(choices))
         )
       })
 
       output$climate_value_ui <- renderUI({
         choices <- OPTS$grid_cols$climate
-        radioGroupButtons(
+        selectInput(
           ns("climate_value"), "Display value",
           choices = choices,
-          selected = coalesce(input$climate_value, first(choices)),
-          size = "sm"
+          selected = coalesce(input$climate_value, first(choices))
         )
       })
 
       output$comparison_value_ui <- renderUI({
         choices <- OPTS$grid_cols$comparison
-        radioGroupButtons(
+        selectInput(
           ns("comparison_value"), "Display value",
           choices = choices,
-          selected = coalesce(input$comparison_value, first(choices)),
-          size = "sm"
+          selected = coalesce(input$comparison_value, first(choices))
         )
       })
 
@@ -856,19 +851,23 @@ mapServer <- function() {
       ## map_extent_ui ----
       output$map_extent_ui <- renderUI({
         div(
-          class = "inline-flex",
-          style = "align-items: center;",
+          class = "well", style = "padding: 15px 10px 0px 10px",
           div(
-            style = "margin-bottom: 10px;",
-            tags$label("Map extent:")
-          ),
-          radioGroupButtons(
-            ns("map_extent"), label = NULL,
-            choices = list(
-              "Wisconsin" = "wi",
-              "Upper Midwest" = "mw"
+            class = "inline-flex",
+            style = "align-items: center;",
+            div(
+              style = "margin-bottom: 10px;",
+              tags$label("Map extent:")
             ),
-            size = "sm"
+            radioGroupButtons(
+              ns("map_extent"), label = NULL,
+              choices = list(
+                "Wisconsin" = "wi",
+                "Upper Midwest" = "mw"
+              ),
+              size = "sm"
+            ),
+            p(style = "font-size: small;", em("Note: App responsiveness may be reduced when selecting 'Upper Midwest'"))
           )
         )
       })
@@ -880,18 +879,6 @@ mapServer <- function() {
         leafletProxy("map") %>%
           fit_extent(extent) %>%
           clearGroup(layers$grid)
-        # %>%
-        #   addRectangles(
-        #     lat1 = bounds$lat[1] - .05,
-        #     lat2 = bounds$lat[2] + .05,
-        #     lng1 = bounds$lng[1] - .05,
-        #     lng2 = bounds$lng[2] + .05,
-        #     color = "black",
-        #     weight = 1,
-        #     opacity = .25,
-        #     fillOpacity = 0,
-        #     layerId = "extent"
-        #   )
 
         # move selection if now outside of extent
         if (!is.null(rv$selected_grid)) {
@@ -959,12 +946,12 @@ mapServer <- function() {
 
       ## lat_lng_ui ----
       # show selected grid below map
-      output$lat_lng_ui <- renderUI({
-        loc <- rv$selected_grid
-        msg <- if (is.null(loc)) "None" else sprintf("%.1f°N, %.1f°W", loc$lat, loc$lng)
-
-        div(strong("Currently selected location:"), msg)
-      })
+      # output$lat_lng_ui <- renderUI({
+      #   loc <- rv$selected_grid
+      #   msg <- if (is.null(loc)) "None" else sprintf("%.1f°N, %.1f°W", loc$lat, loc$lng)
+      #
+      #   div(strong("Currently selected location:"), msg)
+      # })
 
 
 
