@@ -128,9 +128,8 @@ plotServer <- function(loc_data) {
         else if (opts$gdd_type == "Daily")
           plt <- add_gdd_daily_traces(plt, df, "y2")
 
-        if (opts$year != cur_yr - 1) plt <- plt %>% add_today()
-
-        plt
+        if (opts$year == "All") opts$year <- cur_yr
+        plt %>% add_today(yr = opts$year, date_yr = opts$year)
       })
 
 

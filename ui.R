@@ -6,6 +6,7 @@ ui <- navbarPage(
   theme = shinytheme("flatly"),
   position = "fixed-top",
   collapsible = TRUE,
+
   header = tagList(
     tags$head(
       tags$meta(charset = "UTF-8"),
@@ -13,20 +14,22 @@ ui <- navbarPage(
       tags$meta(name = "keywords", content = "uw, wisconsin, alfalfa, weather, frost, freeze, growing degree days, risk, tool"),
       tags$link(rel = "shortcut icon", href = "favicon.ico"),
       tags$link(rel = "stylesheet", type = "text/css", href = "style.css"),
-      useShinyjs(),
       tags$script(src = "script.js"),
       includeHTML("www/google-analytics.html"),
+      useShinyjs()
     ),
     div(
       style = "min-height: 750px; margin: 0 20px;",
       uiOutput("main_ui") %>% withSpinnerProxy()
     )
   ),
+
   tabPanel("Weather Map", icon = icon("map"), value = "map"),
   tabPanel("Growth Projection", icon = icon("leaf"), value = "growth"),
   tabPanel("Season Planning", icon = icon("tractor"), value = "timing"),
   tabPanel("Weather Charts", icon = icon("chart-line"), value = "charts"),
   tabPanel("About", icon = icon("question"), value = "about"),
+
   footer = tags$footer(
     id = "footer-content",
     br(),

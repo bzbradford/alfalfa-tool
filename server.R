@@ -6,28 +6,6 @@ server <- function(input, output, session) {
   OPTS$climate_date_min = start_of_year()
   OPTS$climate_date_max = end_of_year()
 
-  fill_weather <- function(dates = weather_dates()) {
-    msg <- paste("Loading weather data for", first(dates))
-    if (length(dates) > 1) msg <- paste(msg, "-", last(dates))
-    withProgress({
-      for (d in dates) {
-        if (!exists("weather")) weather <<- tibble()
-        wx <- get_weather_grid(d)
-        incProgress(.5)
-        weather <<- bind_rows(weather, wx)
-        weather %>%
-          filter(date >= start_of_year(as_date(d))) %>%
-          remove_weather_cols() %>%
-          write_fst(str_glue("data/weather-{year(d)}.fst"), compress = 99)
-        incProgress(.5)
-      }
-    }, min = 0, max = length(dates), value = 0, message = msg)
-
-
-    # build additional cols
-    weather <<- weather %>% add_weather_cols()
-  }
-
 
   # Reactive values ----
 
@@ -81,18 +59,8 @@ server <- function(input, output, session) {
 
   output$main_ui <- renderUI({
     if (!rv$weather_ready) {
-      # dates <- format(as_date(weather_dates()), "%b %d")
-      # msg <- if (length(dates) == 1) {
-      #   dates
-      # } else {
-      #   paste(c(first(dates), last(dates)), collapse = " - ")
-      # }
-      # msg <- paste0("Please wait, downloading weather data for ", msg, ".")
-      # showModal(modalDialog(msg, title = strong("Loading weather..."), fade = F, footer = NULL))
-      fill_weather()
-      gc()
+      load_data()
       rv$weather_ready <- TRUE
-      # removeModal()
     }
 
     fluidRow(

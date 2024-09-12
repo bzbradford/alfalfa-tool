@@ -40,19 +40,18 @@ mapServer <- function() {
         date_vals = NULL
       )
 
-      weather_data <- reactive({
-        extent <- req(input$map_extent)
-        if (extent == "wi") filter(weather, inwi) else weather
-      })
-
-      climate_data <- reactive({
-        extent <- req(input$map_extent)
-        if (extent == "wi") {
-          lapply(climate, function(df) filter(df, inwi))
-        } else {
-          climate
-        }
-      })
+      # filtered_data <- reactive({
+      #   extent <- req(input$map_extent)
+      #
+      #   if (extent == "wi") {
+      #     list(
+      #       weather = filter(weather, in_extent(lat, lng)),
+      #       climate = lapply(climate, function(df) filter(df, in_extent(lat, lng)))
+      #     )
+      #   } else {
+      #     list(weather = weather, climate = climate)
+      #   }
+      # })
 
 
       # SIDEBAR UI -------------------------------------------------------------
@@ -69,6 +68,7 @@ mapServer <- function() {
       output$map_opts_ui <- renderUI({
         div(
           class = "well",
+          useBusyIndicators(spinners = F, pulse = F, fade = F),
           uiOutput(ns("type_ui")),
           uiOutput(ns("type_opts_ui")),
           uiOutput(ns("value_opts_ui")),
@@ -496,7 +496,7 @@ mapServer <- function() {
               group = layers$counties,
               label = ~label,
               color = "grey",
-              weight = 0.5,
+              weight = 1,
               opacity = 0.25,
               fillColor = ~colorFactor(OPTS$factor_colors, state)(state),
               fillOpacity = 0.1,
@@ -551,7 +551,8 @@ mapServer <- function() {
 
       # handle filtering by date for weather data
       prepare_weather_grid_data <- function(opts) {
-        df <- weather_data() %>%
+        df <- weather %>%
+          filter_by_extent(opts$extent) %>%
           select(all_of(c("lat", "lng", "date", "value" = opts$col)))
         df1 <- if (opts$smoothing > 1 & (opts$col %in% OPTS$smoothable_cols)) {
           df %>%
@@ -564,7 +565,8 @@ mapServer <- function() {
 
       # handle filtering by day of year for climate data
       prepare_climate_grid_data <- function(opts) {
-        df <- climate_data()[[opts$period]] %>%
+        df <- climate[[opts$period]] %>%
+          filter_by_extent(opts$extent) %>%
           select(all_of(c("lat", "lng", "yday", "value" = opts$col)))
         df1 <- if (opts$smoothing > 1) {
           df %>%
@@ -626,6 +628,7 @@ mapServer <- function() {
       ## Set grid data and opts ----
       grid_data <- reactive({
         opts <- list()
+        opts$extent <- req(input$map_extent)
         opts$type <- req(input$data_type)
         opts$col <- req(input[[paste0(opts$type, "_value")]])
         opts$smoothing <- req(input$smoothing) %>% as.numeric()
@@ -693,6 +696,7 @@ mapServer <- function() {
 
 
       ## Draw grid on map ----
+      # observe({print(grid_data()$grid)})
       observe({
         grid <- grid_data()$grid
         opts <- grid_data()$opts
@@ -738,12 +742,12 @@ mapServer <- function() {
 
       # selects only if within bounds
       select_grid <- function(lat, lng) {
-        extent <- req(input$map_extent)
-        if (in_extent(lat, lng, extent)) {
-          rv$selected_grid <- list(
-            lat = round(lat, 1),
-            lng = round(lng, 1)
-          )
+        new_lat = round(lat, 1)
+        new_lng = round(lng, 1)
+        matching_grid <- grid_data()$grid %>%
+          filter(lat == new_lat, lng == new_lng)
+        if (nrow(matching_grid) > 0) {
+          rv$selected_grid <- list(lat = new_lat, lng = new_lng)
         }
       }
 
@@ -883,12 +887,14 @@ mapServer <- function() {
         # move selection if now outside of extent
         if (!is.null(rv$selected_grid)) {
           loc <- rv$selected_grid
-          if (!in_extent(loc$lat, loc$lng, extent)) {
-            rv$selected_grid <- list(
-              lat = clamp(loc$lat, bounds$lat[1], bounds$lat[2]),
-              lng = clamp(loc$lng, bounds$lng[1], bounds$lng[2])
-            )
-          }
+          closest_grid <- climate_grids %>%
+            filter_by_extent(extent) %>%
+            slice_min(abs(lat - loc$lat), n = 1) %>%
+            slice_min(abs(lng - loc$lng), n = 1)
+          rv$selected_grid <- list(
+            lat = closest_grid$lat,
+            lng = closest_grid$lng
+          )
         }
 
         # update bounds on google places search

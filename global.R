@@ -20,6 +20,8 @@ suppressMessages({
   library(RColorBrewer)
 })
 
+# allow bundle size > 1gb
+options(rsconnect.max.bundle.size = 5e9)
 
 
 # Utility functions ----
@@ -120,6 +122,7 @@ gdd_sine <- function(tmin, tmax, base, upper) {
 google_key <- Sys.getenv("google_places_key")
 # style <- read_file("www/style.css") %>% str_replace_all("[\r\n]", " ")
 cur_yr <- year(yesterday())
+min_yr <- 2023
 OPTS <- list(
   # leaflet color palette
   factor_colors = {
@@ -146,11 +149,10 @@ OPTS <- list(
   ),
 
   # interface settings
-  weather_years = c(cur_yr, cur_yr - 1),
-  # weather_date_fmt = "%b %-d, %Y",
+  weather_years = cur_yr:min_yr,
   weather_date_fmt = "%b %-d",
   climate_date_fmt = "%b %-d",
-  weather_date_min = as_date(paste0(cur_yr - 1, "-1-1")),
+  weather_date_min = start_of_year(min_yr),
   weather_date_max = NULL, # set in server
   climate_date_min = NULL, # set in server
   climate_date_max = NULL, # set in server
@@ -324,10 +326,19 @@ pt_to_coords <- function(pt) {
 }
 
 # extent may be 'wi' or 'mw'
-in_extent <- function(lat, lng, extent = "wi") {
+in_extent <- function(lat, lng, extent) {
   extent <- OPTS$map_extent[[extent]]
   between(lat, extent$lat[1], extent$lat[2]) &
     between(lng, extent$lng[1], extent$lng[2])
+}
+
+# potentially supports multiple extents, but for now just 'wi' or everything
+filter_by_extent <- function(.data, extent) {
+  if (extent == "wi") {
+    .data %>% filter(in_extent(lat, lng, extent = "wi"))
+  } else {
+    .data
+  }
 }
 
 parse_coords <- function(str) {
@@ -353,8 +364,7 @@ add_climate_cols <- function(.data) {
       gdd50cum = cumsum(gdd50),
       .by = c(lat, lng),
       .after = gdd50
-    ) %>%
-    mutate(inwi = in_extent(lat, lng))
+    )
 }
 
 smooth_cols <- function(.data, width, cols = OPTS$smoothable_cols) {
@@ -367,7 +377,7 @@ smooth_cols <- function(.data, width, cols = OPTS$smoothable_cols) {
 }
 
 remove_weather_cols <- function(.data) {
-  drop_cols <- c("year", "yday", "mean_temp", "frost", "freeze", "kill", "gdd41cum", "gdd50cum")
+  drop_cols <- c("year", "yday", "mean_temp", "frost", "freeze", "kill", "gdd41cum", "gdd50cum", "inwi")
   .data %>% select(-any_of(drop_cols))
 }
 
@@ -380,8 +390,7 @@ add_weather_cols <- function(.data) {
       mean_temp = rowMeans(pick(min_temp, max_temp)),
       frost = min_temp <= 32,
       freeze = min_temp <= 28,
-      kill = min_temp <= 24,
-      inwi = in_extent(lat, lng)
+      kill = min_temp <= 24
     ) %>%
     mutate(
       gdd41cum = cumsum(gdd41),
@@ -421,12 +430,85 @@ weather_dates <- function() {
 }
 
 
+# Data load functions ----
+
+
+load_climate <- function() {
+  if (!exists("climate")) {
+    climate <<- list(
+      c5 = read_fst("data/climate_5yr.fst"),
+      c10 = read_fst("data/climate_10yr.fst")
+    ) %>%
+      lapply(as_tibble) %>%
+      lapply(add_climate_cols)
+  }
+  if(!exists("climate_grids")) {
+    climate_grids <<- climate$c10 %>% distinct(lat, lng)
+  }
+}
+
+load_weather <- function() {
+  wx_files <- list.files(path = "./data", pattern = "^weather_.*\\.fst$", full.names = T)
+  if (length(wx_files) > 0) {
+    if (!exists("weather") || max(weather$date) != yesterday()) {
+      weather <<- wx_files %>%
+        lapply(read_fst) %>%
+        bind_rows() %>%
+        as_tibble()
+    }
+  }
+}
+
+update_weather <- function(dates = weather_dates(), progress = FALSE) {
+  if (!exists("weather")) weather <<- tibble()
+
+  # fetch new weather
+  if (length(dates) > 0) {
+    new_weather <- lapply(dates, function(d) {
+      if (progress) incProgress(0, detail = paste("Fetching", format(as_date(d), "%b %d, %Y")))
+      get_weather_grid(d)
+    }) %>% bind_rows()
+    weather <<- bind_rows(weather, new_weather)
+  }
+
+  if (progress) incProgress(1, detail = "Finalizing dataset")
+  weather <<- weather %>% add_weather_cols()
+
+  # save weather file(s) if updated
+  lapply(unique(year(as_date(dates))), function(yr) {
+    weather %>%
+      filter(year == yr) %>%
+      remove_weather_cols() %>%
+      write_fst(str_glue("data/weather_{yr}.fst"), compress = 99)
+  })
+}
+
+load_data <- function() {
+  withProgress(
+    message = "Loading datasets...",
+    value = 0, min = 0, max = 2,
+    {
+      incProgress(1, detail = "Climate data")
+      load_climate()
+      incProgress(1, detail = "Weather data")
+      load_weather()
+    }
+  )
+  dates <- weather_dates()
+  withProgress(
+    message = "Updating weather...",
+    value = 0, min = 0, max = length(dates) + 1,
+    update_weather(dates, progress = T)
+  )
+}
+
+
 # Initialize data ----
 
 list.files("R", "*.R", full.names = T) %>% sapply(source)
 
 if (!exists("counties_wi")) {
-  counties_wi <- read_rds("data/counties-wi.rds") %>%
+  counties_wi <- read_rds("data/counties_wi.rds") %>%
     mutate(
       label = paste0("<b>", county, " County</b><br>", dnr_region) %>%
         lapply(shiny::HTML)
@@ -434,36 +516,13 @@ if (!exists("counties_wi")) {
 }
 
 if (!exists("counties_mw")) {
-  counties_mw <- read_rds("data/counties-mw.rds") %>%
+  counties_mw <- read_rds("data/counties_mw.rds") %>%
     mutate(
       label = paste0("<b>", state, "</b><br>", county, " County") %>%
         lapply(shiny::HTML)
     )
 }
 
-
-if (!exists("climate")) {
-  climate <- list(
-    c5 = read_fst("climate/climate_5yr.fst"),
-    c10 = read_fst("climate/climate_10yr.fst")
-  ) %>%
-    lapply(as_tibble) %>%
-    lapply(add_climate_cols)
-  climate_grids <- climate$c10 %>% distinct(lat, lng)
-}
-
-wx_files <- list.files(path = "./data", pattern = "^weather-.*\\.fst$", full.names = T)
-if (length(wx_files) > 0) {
-  if (!exists("weather") || max(weather$date) != yesterday()) {
-    weather <- wx_files %>%
-      lapply(read_fst) %>%
-      bind_rows() %>%
-      as_tibble() %>%
-      inner_join(climate_grids, join_by(lat, lng)) %>%
-      arrange(lat, lng, date) %>%
-      add_weather_cols()
-  }
-}
 
 
 # App cleanup ----
@@ -478,5 +537,30 @@ onStop(
 
 # delete some weather for testing
 # weather <- weather %>% filter(date < Sys.Date() - 3)
-# weather %>% write.fst("data/weather.fst")
+# weather %>%
+#   filter(year == 2024) %>%
+#   remove_weather_cols() %>%
+#   write_fst("data/weather_2024.fst", compress = 99)
 
+# weather
+#
+# rbenchmark::benchmark(
+#   filter = {
+#     weather %>% filter(in_extent(lat, lng))
+#   },
+#   inwi = {
+#     weather %>% filter(inwi)
+#   },
+#   replications = 1
+# )
+#
+#
+# rbenchmark::benchmark(
+#   climate = {
+#     load_climate()
+#   },
+#   weather = {
+#     load_weather()
+#   },
+#   replications = 1
+# )

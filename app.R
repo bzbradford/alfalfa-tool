@@ -2,8 +2,6 @@
 # Ben Bradford, UW-Madison
 
 
-options(rsconnect.max.bundle.size = 5e9)
-
 #- Renv ----
 
 # renv::init()         # initiate renv if not already
