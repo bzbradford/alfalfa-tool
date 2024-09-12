@@ -5,6 +5,7 @@
 #- Renv ----
 
 # renv::init()         # initiate renv if not already
+# renv::status()       # project status
 # renv::dependencies() # show project dependencies
 # renv::clean()        # remove unused packages
 # renv::update()       # update project libraries
