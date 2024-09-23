@@ -1,7 +1,7 @@
 #- ui.R -#
 
 ui <- navbarPage(
-  title = "Alfalfa Cutting Tool",
+  title = "Alfalfa Weather and Cutting Tool",
   id = "navbar",
   theme = shinytheme("flatly"),
   position = "fixed-top",
@@ -10,7 +10,7 @@ ui <- navbarPage(
   header = tagList(
     tags$head(
       tags$meta(charset = "UTF-8"),
-      tags$meta(name = "description", content = "A weather tool for managing frost risk for fall alfalfa cutting in Wisconsin"),
+      tags$meta(name = "description", content = "A weather tool for scheduling alfalfa cutting and managing fall frost risk in Wisconsin and the Upper Midwest"),
       tags$meta(name = "keywords", content = "uw, wisconsin, alfalfa, weather, frost, freeze, growing degree days, risk, tool"),
       tags$link(rel = "shortcut icon", href = "favicon.ico"),
       tags$link(rel = "stylesheet", type = "text/css", href = "style.css"),
@@ -19,8 +19,10 @@ ui <- navbarPage(
       useShinyjs()
     ),
     div(
-      style = "min-height: 750px; margin: 0 20px;",
-      uiOutput("main_ui") %>% withSpinnerProxy()
+      id = "main",
+      withSpinnerProxy(
+        uiOutput("main_ui")
+      )
     )
   ),
 
@@ -31,21 +33,28 @@ ui <- navbarPage(
   tabPanel("About", icon = icon("question"), value = "about"),
 
   footer = tags$footer(
-    id = "footer-content",
-    br(),
-    hr(),
-    p(
-      style = "color: grey; font-size: smaller; font-style: italic;",
-      align = "center",
-      "App developed by",
-      a("Ben Bradford", href = "https://entomology.wisc.edu/directory/ben-bradford/", target = "_blank", .noWS = "after"),
-      ", UW-Madison Entomology",
-      br(),
-      "Last updated:", format(file.info(".")$mtime, "%Y-%m-%d."),
-      a("View source code", href = "https://github.com/bzbradford/alfalfa-tool", target = "_blank", .noWS = "after"), ".",
-      br(),
-      "Feedback welcome!",
-      a("Click here to take our survey.", href = "https://uwmadison.co1.qualtrics.com/jfe/form/SV_81RoNUXYxlicCa2", target = "_blank")
+    class = "footer-container",
+    div(
+      class = "footer-content",
+      div(
+        class = "footer-credits",
+        p(
+          "App developed by",
+          a("Ben Bradford", href = "https://entomology.wisc.edu/directory/ben-bradford/", target = "_blank", .noWS = "after"),
+          ", UW-Madison Entomology",
+          br(),
+          "Last updated:", format(file.info(".")$mtime, "%Y-%m-%d."),
+          a("View source code", href = "https://github.com/bzbradford/alfalfa-tool", target = "_blank", .noWS = "after"), ".",
+        ),
+        p(
+          "Feedback welcome!",
+          a("Click here to take our survey.", href = "https://uwmadison.co1.qualtrics.com/jfe/form/SV_81RoNUXYxlicCa2", target = "_blank")
+        )
+      ),
+      div(
+        class = "footer-badges",
+        img(src = "uw-logo.svg", width = "200px")
+      )
     )
   )
 )

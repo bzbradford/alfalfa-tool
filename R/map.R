@@ -406,15 +406,18 @@ mapServer <- function() {
 
       ## Initialize map ----
 
-      fit_extent <- function(map, extent) {
-        zoom <- ifelse(extent == "wi", 7, 6)
-        center <- OPTS$map_center[[extent]]
-        setView(map, lat = center[1], lng = center[2], zoom = zoom)
+      fit_extent <- function(map, extent = first(OPTS$map_extent_choices)) {
+        bounds <- OPTS$map_extent[[extent]]
+        map %>%
+          fitBounds(
+            lat1 = bounds$lat[1], lat2 = bounds$lat[2],
+            lng1 = bounds$lng[1], lng2 = bounds$lng[2]
+          )
       }
 
       output$map <- renderLeaflet({
         leaflet(options = leafletOptions(preferCanvas = T)) %>%
-          fit_extent("wi") %>%
+          fit_extent() %>%
           addBasemaps() %>%
           addMapPane("counties", 410) %>%
           addMapPane("grid", 420) %>%
@@ -422,12 +425,12 @@ mapServer <- function() {
           addLayersControl(
             baseGroups = basemaps$label,
             overlayGroups = unlist(layers, use.names = F),
-            options = layersControlOptions(collapsed = F)
+            options = layersControlOptions(collapsed = T)
           ) %>%
           addEasyButtonBar(
             easyButton(
               position = "topleft",
-              icon = "fa-crosshairs",
+              icon = "fa-location",
               title = "Show my location on the map",
               onClick = JS("
                 function(btn, map) {
@@ -437,8 +440,8 @@ mapServer <- function() {
             ),
             easyButton(
               position = "topleft",
-              icon = "fa-magnifying-glass",
-              title = "Zoom to selected grid",
+              icon = "fa-search",
+              title = "Zoom to selected grid (if any)",
               onClick = JS("
                 function(btn, map) {
                   Shiny.setInputValue('map-easy_btn', 'zoom_grid', {priority: 'event'});
@@ -503,19 +506,6 @@ mapServer <- function() {
               options = pathOptions(pane = "counties")
             )
         }
-      })
-
-
-      ## Hide layer control after delay ----
-
-      observeEvent(TRUE, {
-        delay(3000, {
-          leafletProxy(ns("map")) %>%
-            addLayersControl(
-              baseGroups = basemaps$label,
-              overlayGroups = unlist(layers, use.names = FALSE),
-            )
-        })
       })
 
 
@@ -865,13 +855,9 @@ mapServer <- function() {
             ),
             radioGroupButtons(
               ns("map_extent"), label = NULL,
-              choices = list(
-                "Wisconsin" = "wi",
-                "Upper Midwest" = "mw"
-              ),
+              choices = OPTS$map_extent_choices,
               size = "sm"
-            ),
-            p(style = "font-size: small;", em("Note: App responsiveness may be reduced when selecting 'Upper Midwest'"))
+            )
           )
         )
       })

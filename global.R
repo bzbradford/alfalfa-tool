@@ -147,6 +147,10 @@ OPTS <- list(
       lng = c(-98, -82)
     )
   ),
+  map_extent_choices = list(
+    "Wisconsin" = "wi",
+    "Upper Midwest" = "mw"
+  ),
 
   # interface settings
   weather_years = cur_yr:min_yr,
@@ -465,13 +469,13 @@ update_weather <- function(dates = weather_dates(), progress = FALSE) {
   # fetch new weather
   if (length(dates) > 0) {
     new_weather <- lapply(dates, function(d) {
-      if (progress) incProgress(0, detail = paste("Fetching", format(as_date(d), "%b %d, %Y")))
+      if (progress) incProgress(1 / length(dates), message = "Updating weather...", detail = paste("Fetching", format(as_date(d), "%b %d, %Y")))
       get_weather_grid(d)
     }) %>% bind_rows()
     weather <<- bind_rows(weather, new_weather)
   }
 
-  if (progress) incProgress(1, detail = "Finalizing dataset")
+  if (progress) incProgress(1, message = "Finalizing datasets...", detail = "")
   weather <<- weather %>% add_weather_cols()
 
   # save weather file(s) if updated
@@ -486,20 +490,21 @@ update_weather <- function(dates = weather_dates(), progress = FALSE) {
 load_data <- function() {
   withProgress(
     message = "Loading datasets...",
-    value = 0, min = 0, max = 2,
+    value = 0, min = 0, max = 3,
     {
-      incProgress(1, detail = "Climate data")
       load_climate()
-      incProgress(1, detail = "Weather data")
       load_weather()
+      dates <- weather_dates()
+      incProgress(ifelse(length(dates) > 0, 1, 2))
+      update_weather(dates, progress = T)
     }
   )
-  dates <- weather_dates()
-  withProgress(
-    message = "Updating weather...",
-    value = 0, min = 0, max = length(dates) + 1,
-    update_weather(dates, progress = T)
-  )
+  #
+  # withProgress(
+  #   message = "Updating weather...",
+  #   value = 0, min = 0, max = length(dates) + 1,
+  #
+  # )
 }
 
 
@@ -528,9 +533,9 @@ if (!exists("counties_mw")) {
 # App cleanup ----
 
 # removes all objects from the environment on app shutdown
-onStop(
-  function() { rm(list = ls(all.names = TRUE)) }
-)
+# onStop(
+#   function() { rm(list = ls(all.names = TRUE)) }
+# )
 
 
 # Testing ----

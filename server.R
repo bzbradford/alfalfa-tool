@@ -64,10 +64,7 @@ server <- function(input, output, session) {
     }
 
     fluidRow(
-      column(6,
-        h3("Gridded weather and climate map"),
-        mapUI(),
-      ),
+      column(6, h3("Weather and climate map"), mapUI()),
       column(6, uiOutput("sidebar_ui"))
     )
   })
@@ -100,6 +97,8 @@ server <- function(input, output, session) {
 
   output$sidebar_ui <- renderUI({
     page <- req(input$navbar)
+    # scroll to sidebar element on mobile view
+    runjs("if (window.innerWidth < 768) document.getElementById('sidebar_ui').scrollIntoView();")
     sidebar_pages[[page]]
   })
 

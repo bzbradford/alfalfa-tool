@@ -5,6 +5,4 @@
 .Rprofile
 .Renviron
 
-*.rds
-*.feather
-*.geojson
+data/

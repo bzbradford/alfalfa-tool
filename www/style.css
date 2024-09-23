@@ -1,15 +1,213 @@
+/* === ALFALFA WEATHER TOOL === */
 
-/* modified classes */
+/*--- LAYOUT ---*/
 
 body {
   font-family: 'Lato', sans-serif;
   padding-top: 70px;
+  min-height: 100vh;
 }
+
+a, a:hover, a:focus {
+  color: #48a67b;
+}
+
+
+/* content sizing */
 
 .container-fluid {
   max-width: 1600px;
   margin: auto;
 }
+
+#main {
+  min-height: min(994px, calc(100vh - 70px - 125px));
+  margin: 0 20px;
+}
+
+/* navbar styles */
+
+.navbar-default {
+  font-weight: bold;
+  background-color: hsl(358, 95%, 30%);
+}
+
+.navbar-default .navbar-brand:hover {
+  color: #fff;
+}
+
+.navbar-default .navbar-nav > li > a {
+  background-color: hsl(358, 95%, 30%);
+}
+
+.navbar-default .navbar-nav > .active > a,
+.navbar-default .navbar-nav > .active > a:focus {
+  color: #fff;
+  background-color: hsl(358, 95%, 40%);
+}
+
+.navbar-default .navbar-nav > li > a:hover,
+.navbar-default .navbar-nav > .active > a:hover {
+  color: #fff;
+  background-color: hsl(358, 95%, 45%);
+}
+
+.navbar-default .navbar-toggle,
+.navbar-default .navbar-toggle:hover,
+.navbar-default .navbar-toggle:focus {
+  background-color: hsl(358, 95%, 40%);
+}
+
+
+/* footer styles */
+
+.footer-container {
+  margin-top: 25px;
+  width: 100%;
+}
+
+.footer-content {
+  max-width: 1600px;
+  padding: 15px;
+  border-top: 1px solid #ecf0f1;
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.footer-credits {
+  font-size: small;
+  color: grey;
+  font-style: italic;
+}
+
+@media only screen  and (max-width: 600px) {
+  .footer-content {
+    flex-direction: column;
+    align-items: center;
+  }
+  .footer-credits {
+    text-align: center;
+  }
+}
+
+
+/* progress bar */
+
+.shiny-notification {
+  width: 500px;
+  max-width: calc(100vw - 20px);
+  position: fixed;
+  top: calc(50%);
+  left: calc(50% - 250px);
+  font-size: large;
+  text-align: center;
+}
+
+.shiny-notification-close {
+  display: none;
+}
+
+
+/* flex wrap */
+
+.inline-flex {
+  display: inline-flex;
+  column-gap: 20px;
+  flex-wrap: wrap;
+}
+
+.inline-flex > * > .shiny-date-input {
+  margin-bottom: 0;
+}
+
+
+/* layout tweaks */
+
+.option-well {
+  padding: 10px 10px 0px 10px;
+  border: 1px solid transparent;
+  background: #ebf0f1;
+  border-radius: 4px;
+  margin-bottom: 15px;
+}
+
+.map-display-opts .checkbox {
+  margin: 0;
+}
+
+/* remove bottom padding in bscollapse */
+.panel-body {
+  padding-bottom: 0;
+}
+
+
+/* scheduling date inputs */
+
+.date-btns {
+  display: inline-flex;
+  width: 100%;
+  gap: 5px;
+  margin-bottom: 1em;
+}
+
+.date-btns button {
+  padding: 5px 10px;
+}
+
+
+
+/*--- STYLES ---*/
+
+/* change appearance of validate(need(...)) */
+
+.shiny-output-error-validation {
+  border: 1px solid rgb(39, 128, 227);
+  border-radius: 5px;
+  margin: 20px 0px;
+  padding: 10px;
+  background: rgb(236, 244, 252);
+  color: #222;
+}
+
+
+/* radioGroupButtons */
+
+.btn-group {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.radiobtn {
+  border-radius: 5px !important;
+}
+
+.plot-caption {
+  padding: 1em;
+  text-align: center;
+  font-style: italic;
+  font-size: small;
+}
+
+
+/* animate collapse arrow */
+
+.panel-title > a:before {
+  display: inline-block;
+  margin-right: 5px;
+  content: '▼';
+  transition: 0.25s;
+  transform: rotate(-90deg);
+}
+
+.panel-title > a[aria-expanded=true]:before {
+  transform: rotate(0);
+}
+
+
+/*--- LEAFLET ---*/
 
 .leaflet-control-layers-list::before {
   content: 'Basemap:';
@@ -25,6 +223,16 @@ body {
   max-height: min(90vh, 120vw);
 }
 
+.leaflet-control-attribution {
+  display: none;
+}
+
+/* make sure datepicker renders above map */
+.datepicker {
+  z-index: 9999 !important;
+}
+
+/* leaflet title */
 .map-title-container {
   position: absolute;
   text-align: center;
@@ -44,112 +252,3 @@ body {
   font-weight: bold;
 }
 
-.leaflet-control-attribution {
-  display: none;
-}
-
-a, a:hover, a:focus {
-  color: #48a67b;
-}
-
-.datepicker {
-  z-index: 9999 !important;
-}
-
-
-/* radioGroupButtons */
-.btn-group {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 5px;
-}
-
-.radiobtn {
-  border-radius: 5px !important;
-}
-
-
-/* Progress bar */
-
-.shiny-notification {
-  width: 500px;
-  position: fixed;
-  top: calc(50%);
-  left: calc(50% - 250px);
-  font-size: large;
-  text-align: center;
-}
-
-.shiny-notification-close {
-  display: none;
-}
-
-
-/* new classes */
-
-.date-btns {
-  display: inline-flex;
-  width: 100%;
-  gap: 5px;
-  margin-bottom: 1em;
-}
-
-.date-btns button {
-  padding: 5px 10px;
-}
-
-.plot-caption {
-  padding: 1em;
-  text-align: center;
-  font-style: italic;
-  font-size: small;
-}
-
-.option-well {
-  padding: 10px 10px 0px 10px;
-  border: 1px solid transparent;
-  background: #ebf0f1;
-  border-radius: 4px;
-  margin-bottom: 15px;
-}
-
-.inline-flex {
-  display: inline-flex;
-  column-gap: 20px;
-  flex-wrap: wrap;
-}
-
-.inline-flex > * > .shiny-date-input {
-  margin-bottom: 0;
-}
-
-.map-display-opts .checkbox {
-  margin: 0;
-}
-
-/* remove bottom padding in bscollapse */
-.panel-body {
-  padding-bottom: 0;
-}
-
-/* animate collapse arrow */
-.panel-title > a:before {
-  display: inline-block;
-  margin-right: 5px;
-  content: '▼';
-  transition: 0.25s;
-  transform: rotate(-90deg);
-}
-
-.panel-title > a[aria-expanded=true]:before {
-  transform: rotate(0);
-}
-
-.shiny-output-error-validation {
-  border: 1px solid rgb(39, 128, 227);
-  border-radius: 5px;
-  margin: 20px 0px;
-  padding: 10px;
-  background: rgb(236, 244, 252);
-  color: #222;
-}
