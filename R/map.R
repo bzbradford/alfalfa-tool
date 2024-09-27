@@ -37,21 +37,11 @@ mapServer <- function() {
         # stores date slider state
         date_id = "date",
         date_set = NULL,
-        date_vals = NULL
-      )
+        date_vals = NULL,
 
-      # filtered_data <- reactive({
-      #   extent <- req(input$map_extent)
-      #
-      #   if (extent == "wi") {
-      #     list(
-      #       weather = filter(weather, in_extent(lat, lng)),
-      #       climate = lapply(climate, function(df) filter(df, in_extent(lat, lng)))
-      #     )
-      #   } else {
-      #     list(weather = weather, climate = climate)
-      #   }
-      # })
+        # grid data and opts
+        grid_data = NULL
+      )
 
 
       # SIDEBAR UI -------------------------------------------------------------
@@ -391,7 +381,7 @@ mapServer <- function() {
       ## Map title ----
 
       output$map_title <- renderUI({
-        opts <- grid_data()$opts
+        opts <- req(rv$grid_data$opts)
         cols <- OPTS$grid_cols[[opts$type]]
         title <- setNames(names(cols), cols)[[opts$col]]
         date_fmt <- ifelse(opts$type == "climate", "%b %d", "%b %d, %Y")
@@ -616,7 +606,7 @@ mapServer <- function() {
       }
 
       ## Set grid data and opts ----
-      grid_data <- reactive({
+      observe({
         opts <- list()
         opts$extent <- req(input$map_extent)
         opts$type <- req(input$data_type)
@@ -645,14 +635,14 @@ mapServer <- function() {
               mutate(value = wx_value - cl_value)
           }
 
-        list(grid = grid, opts = opts)
+        rv$grid_data <- list(grid = grid, opts = opts)
       })
 
 
       ## Set grid domain and palette ----
       grid_pal <- reactive({
-        grid <- grid_data()$grid
-        opts <- grid_data()$opts
+        grid <- req(rv$grid_data$grid)
+        opts <- req(rv$grid_data$opts)
         opts$autoscale <- isTRUE(input$legend_autoscale)
 
         req(nrow(grid) > 0)
@@ -688,8 +678,8 @@ mapServer <- function() {
       ## Draw grid on map ----
       # observe({print(grid_data()$grid)})
       observe({
-        grid <- grid_data()$grid
-        opts <- grid_data()$opts
+        grid <- req(rv$grid_data$grid)
+        opts <- req(rv$grid_data$opts)
         opts$pal <- grid_pal()$pal
         opts$domain <- grid_pal()$domain
 
@@ -734,7 +724,7 @@ mapServer <- function() {
       select_grid <- function(lat, lng) {
         new_lat = round(lat, 1)
         new_lng = round(lng, 1)
-        matching_grid <- grid_data()$grid %>%
+        matching_grid <- req(rv$grid_data$grid) %>%
           filter(lat == new_lat, lng == new_lng)
         if (nrow(matching_grid) > 0) {
           rv$selected_grid <- list(lat = new_lat, lng = new_lng)
@@ -775,8 +765,8 @@ mapServer <- function() {
         }
 
         loc <- req(rv$selected_grid)
-        opts <- grid_data()$opts
-        grid <- grid_data()$grid %>%
+        opts <- req(rv$grid_data$opts)
+        grid <- req(rv$grid_data$grid) %>%
           filter(lat == loc$lat, lng == loc$lng) %>%
           set_grid_labels(opts, selected = T)
 
