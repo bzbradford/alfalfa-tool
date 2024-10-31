@@ -194,6 +194,7 @@ mapServer <- function() {
         }
       })
 
+      ### Weather date slider ----
       output$weather_date_ui <- renderUI({
         opts <- list()
         opts$type <- req(input$data_type)
@@ -203,12 +204,18 @@ mapServer <- function() {
         opts$max <- min(yesterday(), end_of_year(opts$year))
         opts$prev_dates <- rv$date_set
         opts$end_date <-
-          coalesce(opts$prev_dates$end, rev(input$weather_date)[1], yesterday()) %>%
+          coalesce(
+            opts$prev_dates$end,
+            rev(weather_date())[1],
+            yesterday()) %>%
           align_dates(opts$min) %>%
           clamp(opts$min, opts$max)
         if (opts$value %in% OPTS$cumulative_cols) {
           opts$start_date <-
-            coalesce(opts$prev_dates$start, rev(input$weather_date)[2], opts$min) %>%
+            coalesce(
+              opts$prev_dates$start,
+              rev(weather_date())[2],
+              opts$min) %>%
             align_dates(opts$min)
         }
         sliderInput(
@@ -219,6 +226,7 @@ mapServer <- function() {
         )
       })
 
+      ### Climate date slider ----
       output$climate_date_ui <- renderUI({
         opts <- list()
         opts$type <- req(input$data_type)
@@ -228,12 +236,20 @@ mapServer <- function() {
         opts$max <- end_of_year()
         opts$prev_dates <- rv$date_set
         opts$end_date <-
-          coalesce(opts$prev_dates$end, rev(input$climate_date)[1], rev(input$weather_date)[1], yesterday()) %>%
+          coalesce(
+            opts$prev_dates$end,
+            rev(climate_date())[1],
+            rev(weather_date())[1],
+            yesterday()) %>%
           align_dates(opts$min) %>%
           clamp(opts$min, opts$max)
         if (opts$value %in% OPTS$cumulative_cols) {
           opts$start_date <-
-            coalesce(opts$prev_dates$start, rev(input$climate_date)[2], rev(input$weather_date)[2], opts$min) %>%
+            coalesce(
+              opts$prev_dates$start,
+              rev(climate_date())[2],
+              rev(weather_date())[2],
+              opts$min) %>%
             align_dates(opts$min)
         }
         sliderInput(
@@ -244,10 +260,27 @@ mapServer <- function() {
         )
       })
 
+
+      ### Debounced date values ----
+
+      weather_date <- reactive(input$weather_date) %>%
+        debounce(OPTS$debounce_ms)
+
+      climate_date <- reactive(input$climate_date) %>%
+        debounce(OPTS$debounce_ms)
+
+      grid_date <- reactive({
+        if (req(input$data_type) == "climate") {
+          climate_date()
+        } else {
+          weather_date()
+        }
+      })
+
       # store date slider values in rv
       observe({
         type <- req(input$data_type)
-        dt <- if (type == "climate") req(input$climate_date) else req(input$weather_date)
+        dt <- req(grid_date())
         prev <- rv$date_vals
         dates <- list(start = NULL, end = NULL)
 
@@ -607,24 +640,13 @@ mapServer <- function() {
 
 
       ## Set grid data and opts ----
-
-      # debounce the date slider
-      grid_date <- reactive({
-        if (req(input$data_type) == "climate") {
-          req(input$climate_date)
-        } else {
-          req(input$weather_date)
-        }
-      }) %>% debounce(250)
-
-      # generate grid data and options
       observe({
         opts <- list()
         opts$extent <- req(input$map_extent)
         opts$type <- req(input$data_type)
         opts$col <- req(input[[paste0(opts$type, "_value")]])
         opts$smoothing <- req(input$smoothing) %>% as.numeric()
-        opts$date <- grid_date()
+        opts$date <- req(grid_date())
         if (opts$col %in% OPTS$cumulative_cols) {
           req(length(opts$date) == 2)
         } else {

@@ -153,6 +153,7 @@ OPTS <- list(
   ),
 
   # interface settings
+  debounce_ms = 200,
   weather_years = cur_yr:min_yr,
   weather_date_fmt = "%b %-d",
   climate_date_fmt = "%b %-d",
