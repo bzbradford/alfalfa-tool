@@ -605,14 +605,26 @@ mapServer <- function() {
         signif(c(min_val, max_val), 3)
       }
 
+
       ## Set grid data and opts ----
+
+      # debounce the date slider
+      grid_date <- reactive({
+        if (req(input$data_type) == "climate") {
+          req(input$climate_date)
+        } else {
+          req(input$weather_date)
+        }
+      }) %>% debounce(250)
+
+      # generate grid data and options
       observe({
         opts <- list()
         opts$extent <- req(input$map_extent)
         opts$type <- req(input$data_type)
         opts$col <- req(input[[paste0(opts$type, "_value")]])
         opts$smoothing <- req(input$smoothing) %>% as.numeric()
-        opts$date <- if (opts$type == "climate") req(input$climate_date) else req(input$weather_date)
+        opts$date <- grid_date()
         if (opts$col %in% OPTS$cumulative_cols) {
           req(length(opts$date) == 2)
         } else {
