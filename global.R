@@ -278,21 +278,20 @@ withSpinnerProxy <- function(ui, ...) {
   ui %>% shinycssloaders::withSpinner(type = 8, color = "#30a67d", proxy.height = "400px", ...)
 }
 
-buildPlotDlBtn <- function(id, fname, text = "Download plot image") {
-  print(id)
-  cmd <- paste0("this.disable; html2canvas(document.querySelector('", id, "'), {scale: 3}).then(canvas => {saveAs(canvas.toDataURL(), '", fname, "')}); this.enable;")
-  p(
-    class = "plot-caption",
-    style = "margin: 15px;",
-    align = "center",
-    a(
-      class = "btn btn-default btn-sm",
-      style = "cursor: pointer;",
-      onclick = cmd,
-      text
-    )
-  )
-}
+# buildPlotDlBtn <- function(id, fname, text = "Download plot image") {
+#   cmd <- paste0("this.disable; html2canvas(document.querySelector('", id, "'), {scale: 3}).then(canvas => {saveAs(canvas.toDataURL(), '", fname, "')}); this.enable;")
+#   p(
+#     class = "plot-caption",
+#     style = "margin: 15px;",
+#     align = "center",
+#     a(
+#       class = "btn btn-default btn-sm",
+#       style = "cursor: pointer;",
+#       onclick = cmd,
+#       text
+#     )
+#   )
+# }
 
 
 ## Helper functions ----
