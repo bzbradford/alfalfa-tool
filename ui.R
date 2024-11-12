@@ -4,7 +4,7 @@ ui <- navbarPage(
   title = "Alfalfa Weather and Cutting Tool",
   id = "navbar",
   theme = shinytheme("flatly"),
-  position = "fixed-top",
+  # position = "fixed-top",
   collapsible = TRUE,
 
   header = tagList(
@@ -30,6 +30,7 @@ ui <- navbarPage(
   tabPanel("Growth Projection", icon = icon("leaf"), value = "growth"),
   tabPanel("Season Planning", icon = icon("tractor"), value = "timing"),
   tabPanel("Weather Charts", icon = icon("chart-line"), value = "charts"),
+  tabPanel("Downloads", icon = icon("download"), value = "downloads"),
   tabPanel("About", icon = icon("question"), value = "about"),
 
   footer = tags$footer(

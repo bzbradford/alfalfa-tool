@@ -123,7 +123,7 @@ google_key <- Sys.getenv("google_places_key")
 # style <- read_file("www/style.css") %>% str_replace_all("[\r\n]", " ")
 cur_yr <- year(yesterday())
 min_yr <- 2023
-OPTS <- list(
+OPTS <- lst(
   # leaflet color palette
   factor_colors = {
     qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
@@ -148,8 +148,8 @@ OPTS <- list(
     )
   ),
   map_extent_choices = list(
-    "Wisconsin" = "wi",
-    "Upper Midwest" = "mw"
+    "Upper Midwest" = "mw",
+    "Wisconsin" = "wi"
   ),
 
   # interface settings
@@ -173,10 +173,6 @@ OPTS <- list(
     "10-year climate average (2013-2023)" = "c10",
     "5-year climate average (2018-2023)" = "c5"
   ),
-  plot_period_prefix = list(
-    "c10" = "10-year climate average (2013-2023)",
-    "c5" = "5-year climate average (2018-2023)"
-  ),
   climate_frost_choices = list(
     "Frost (<32°F)" = "frost",
     "Hard freeze (<28°F)" = "freeze",
@@ -187,12 +183,6 @@ OPTS <- list(
     "7-day average" = "7",
     "14-day average" = "14",
     "28-day average" = "28"
-  ),
-  plot_smoothing_prefix = list(
-    "1" = "Daily",
-    "7" = "7-day average",
-    "14" = "14-day average",
-    "28" = "28-day average"
   ),
   custom_plot_elems = list(
     "Weather - Temperature" = "weather_temp",
@@ -306,6 +296,17 @@ buildPlotDlBtn <- function(id, fname, text = "Download plot image") {
 
 
 ## Helper functions ----
+
+invert <- function(x) {
+  y <- as(names(x), class(x))
+  names(y) <- x
+  y
+}
+
+# returns the label associated with a grid type and value
+get_col_label <- function(type, col) {
+  invert(OPTS$grid_cols[[type]])[[col]]
+}
 
 # converts the incoming json coordinates in the form '[lat, lng]' to cols
 fix_coords <- function(df) {

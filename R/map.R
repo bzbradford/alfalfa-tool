@@ -9,7 +9,6 @@ mapUI <- function() {
       div(class = "map-title-container", uiOutput(ns("map_title"))),
       leafletOutput(ns("map"), width = "100%", height = "750px")
     ),
-    uiOutput(ns("map_extent_ui")),
     fluidRow(
       column(6, uiOutput(ns("searchbox_ui"))),
       column(6, uiOutput(ns("coord_search_ui")))
@@ -59,6 +58,7 @@ mapServer <- function() {
         div(
           class = "well",
           useBusyIndicators(spinners = F, pulse = F, fade = F),
+          uiOutput(ns("map_extent_ui")),
           uiOutput(ns("type_ui")),
           uiOutput(ns("type_opts_ui")),
           uiOutput(ns("value_opts_ui")),
@@ -69,6 +69,15 @@ mapServer <- function() {
             uiOutput(ns("date_btns_ui")),
           ),
           uiOutput(ns("display_opts_ui"))
+        )
+      })
+
+      ## map_extent_ui ----
+      output$map_extent_ui <- renderUI({
+        radioGroupButtons(
+          ns("map_extent"), "Map extent",
+          choices = OPTS$map_extent_choices,
+          size = "sm"
         )
       })
 
@@ -415,8 +424,7 @@ mapServer <- function() {
 
       output$map_title <- renderUI({
         opts <- req(rv$grid_data$opts)
-        cols <- OPTS$grid_cols[[opts$type]]
-        title <- setNames(names(cols), cols)[[opts$col]]
+        title <- get_col_label(opts$type, opts$col)
         date_fmt <- ifelse(opts$type == "climate", "%b %d", "%b %d, %Y")
         date_str <- paste(format(opts$date, date_fmt), collapse = "-")
         title <- paste0(title, " - ", date_str)
@@ -463,7 +471,7 @@ mapServer <- function() {
             ),
             easyButton(
               position = "topleft",
-              icon = "fa-search",
+              icon = "fa-search-location",
               title = "Zoom to selected grid (if any)",
               onClick = JS("
                 function(btn, map) {
@@ -613,8 +621,8 @@ mapServer <- function() {
       # TODO: add other data to label?
       set_grid_labels <- function(.data, opts, selected = F) {
         cols <- OPTS$grid_cols[[opts$type]]
-
         prefix <- setNames(names(cols), cols)[[opts$col]]
+
         .data %>% mutate(
           label = paste0(
             str_glue("<b>{lat}°N, {lng}°W</b>"),
@@ -639,6 +647,8 @@ mapServer <- function() {
       }
 
 
+
+
       ## Set grid data and opts ----
       observe({
         opts <- list()
@@ -647,11 +657,9 @@ mapServer <- function() {
         opts$col <- req(input[[paste0(opts$type, "_value")]])
         opts$smoothing <- req(input$smoothing) %>% as.numeric()
         opts$date <- req(grid_date())
-        if (opts$col %in% OPTS$cumulative_cols) {
-          req(length(opts$date) == 2)
-        } else {
-          req(length(opts$date) == 1)
-        }
+        date_len <- ifelse(opts$col %in% OPTS$cumulative_cols, 2, 1)
+        req(length(opts$date) == date_len)
+        opts$value_label <- get_col_label(opts$type, opts$col)
 
         # set grid data
         grid <-
@@ -668,6 +676,21 @@ mapServer <- function() {
               left_join(wx, join_by(lat, lng)) %>%
               mutate(value = wx_value - cl_value)
           }
+
+        # prepare grid labels
+        grid <- grid %>% mutate(
+          grid_str = sprintf("%.1f°N, %.1f°W", lat, lng),
+          value_str =
+            if (opts$type == "weather" & opts$col %in% c("frost", "freeze")) {
+              sprintf("%s", value)
+            } else if (opts$col %in% OPTS$percent_cols) {
+              sprintf("%.1f%%", value * 100)
+            } else if (opts$type == "comparison") {
+              sprintf("%+.1f<br>Observed: %.1f, Average: %.1f", value, wx_value, cl_value)
+            } else {
+              sprintf("%.1f", value)
+            }
+          )
 
         rv$grid_data <- list(grid = grid, opts = opts)
       })
@@ -710,24 +733,19 @@ mapServer <- function() {
 
 
       ## Draw grid on map ----
-      # observe({print(grid_data()$grid)})
       observe({
         grid <- req(rv$grid_data$grid)
         opts <- req(rv$grid_data$opts)
         opts$pal <- grid_pal()$pal
         opts$domain <- grid_pal()$domain
 
-        # make sure date slider has updated
-        if (opts$col %in% OPTS$cumulative_cols) {
-          req(length(opts$date) == 2)
-        } else {
-          req(length(opts$date) == 1)
-        }
+        # make sure date slider is correctly single or double ended
+        date_len <- ifelse(opts$col %in% OPTS$cumulative_cols, 2, 1)
+        req(length(opts$date) == date_len)
 
         grid <- grid %>%
           mutate(pal_value = mapply(clamp, value, opts$domain[1], opts$domain[2])) %>%
-          mutate(fill = opts$pal(pal_value)) %>%
-          set_grid_labels(opts)
+          mutate(fill = opts$pal(pal_value))
 
         leafletProxy(ns("map")) %>%
           addRectangles(
@@ -739,7 +757,8 @@ mapServer <- function() {
             weight = 0,
             fillOpacity = .75,
             fillColor = ~fill,
-            label = ~lapply(label, shiny::HTML),
+            label = ~str_glue("<b>{grid_str}</b><br>{opts$value_label}: {value_str}") %>%
+              lapply(shiny::HTML),
             options = pathOptions(pane = "grid")
           ) %>%
           addLegend(
@@ -774,38 +793,24 @@ mapServer <- function() {
         }
       })
 
-      ## Display grid coordinates on map ----
-      observe({
-        loc <- req(rv$selected_grid)
-
-        leafletProxy(ns("map")) %>%
-          removeControl("selected_coords") %>%
-          addControl(
-            sprintf("<b>Selected grid:</b> %.1f°N, %.1f°W", loc$lat, loc$lng),
-            position = "bottomleft",
-            layerId = "selected_coords"
-          )
-      })
-
-
       ## Draw selected grid ----
       # TODO: add a popup with more information?
       observe({
         map <- leafletProxy(ns("map"))
-
-        if (is.null(rv$selected_grid)) {
-          map %>% removeShape("selected_grid")
-          req(F)
-        }
-
         loc <- req(rv$selected_grid)
         opts <- req(rv$grid_data$opts)
         grid <- req(rv$grid_data$grid) %>%
-          filter(lat == loc$lat, lng == loc$lng) %>%
-          set_grid_labels(opts, selected = T)
+          filter(lat == loc$lat, lng == loc$lng)
+
+        control_str <- str_glue("<b>Selected grid: {grid$grid_str}</b><br>{opts$value_label}: {grid$value_str}")
+        grid_str <- str_glue("<b>{grid$grid_str}</b> (selected)<br>{opts$value_label}: {grid$value_str}")
 
         map %>%
-          removeShape("selected_grid") %>%
+          addControl(
+            control_str,
+            position = "bottomleft",
+            layerId = "selected_coords"
+          ) %>%
           addRectangles(
             data = grid,
             lat1 = ~lat - .05, lat2 = ~lat + .05,
@@ -814,11 +819,10 @@ mapServer <- function() {
             layerId = "selected",
             weight = .5, opacity = 1, color = "black",
             fillOpacity = 0,
-            label = ~HTML(label),
+            label = HTML(grid_str),
             options = pathOptions(pane = "selected_grid")
           )
       })
-
 
 
       ## Handle user location ----
@@ -865,26 +869,6 @@ mapServer <- function() {
 
 
       # LOWER UI ---------------------------------------------------------------
-
-      ## map_extent_ui ----
-      output$map_extent_ui <- renderUI({
-        div(
-          class = "well", style = "padding: 15px 10px 0px 10px",
-          div(
-            class = "inline-flex",
-            style = "align-items: center;",
-            div(
-              style = "margin-bottom: 10px;",
-              tags$label("Map extent:")
-            ),
-            radioGroupButtons(
-              ns("map_extent"), label = NULL,
-              choices = OPTS$map_extent_choices,
-              size = "sm"
-            )
-          )
-        )
-      })
 
       observeEvent(input$map_extent, {
         extent <- req(input$map_extent)
@@ -960,20 +944,12 @@ mapServer <- function() {
         })
       })
 
-      ## lat_lng_ui ----
-      # show selected grid below map
-      # output$lat_lng_ui <- renderUI({
-      #   loc <- rv$selected_grid
-      #   msg <- if (is.null(loc)) "None" else sprintf("%.1f°N, %.1f°W", loc$lat, loc$lng)
-      #
-      #   div(strong("Currently selected location:"), msg)
-      # })
-
 
 
       # RETURN -----------------------------------------------------------------
 
       return(reactive(list(
+        grid_data = rv$grid_data,
         selected_grid = rv$selected_grid
       )))
 

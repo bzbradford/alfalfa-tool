@@ -176,7 +176,7 @@ plotServer <- function(loc_data) {
           smoothing = req(input$climate_smoothing)
         )
         opts$title <- paste(
-          OPTS$plot_period_prefix[[opts$period]],
+          invert(OPTS$climate_period_choices)[[opts$period]],
           sprintf("data for %.1f°N, %.1f°W", opts$loc$lat, opts$loc$lng)
         )
 
