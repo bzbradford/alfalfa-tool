@@ -727,7 +727,8 @@ mapServer <- function() {
 
         list(
           domain = opts$domain,
-          pal = colorNumeric(opts$colors, opts$domain, reverse = T)
+          pal = colorNumeric(opts$colors, opts$domain, reverse = TRUE),
+          pal_rev = colorNumeric(opts$colors, opts$domain, reverse = FALSE)
         )
       })
 
@@ -735,9 +736,10 @@ mapServer <- function() {
       ## Draw grid on map ----
       observe({
         grid <- req(rv$grid_data$grid)
-        opts <- req(rv$grid_data$opts)
-        opts$pal <- grid_pal()$pal
-        opts$domain <- grid_pal()$domain
+        opts <- append(
+          req(rv$grid_data$opts),
+          grid_pal()
+        )
 
         # make sure date slider is correctly single or double ended
         date_len <- ifelse(opts$col %in% OPTS$cumulative_cols, 2, 1)
@@ -764,9 +766,10 @@ mapServer <- function() {
           addLegend(
             layerId = "legend",
             position = "bottomright",
-            pal = opts$pal,
+            pal = opts$pal_rev,
             bins = 5,
-            values = opts$domain
+            values = opts$domain,
+            labFormat = labelFormat(transform = function(x) sort(x, decreasing = TRUE))
           )
       })
 

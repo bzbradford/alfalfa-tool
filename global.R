@@ -56,64 +56,36 @@ clamp <- function(x, left, right) {
   min(max(left, x), right)
 }
 
-calc_gdd <- function(tmin, tmax, base, upper) {
-  mapply(gdd_sine, tmin, tmax, base, upper)
-}
+#' Single sine method
+#' to create GDDs with an upper threshold, calculate GDDs with the upper threshold
+#' as the base temperature and subtract that value from the GDDs for the base temp
+#' @param tmin minimum daily temperature
+#' @param tmax maximum daily temperature
+#' @param base base/lower temperature threshold
+#' @returns single sine growing degree days for one day
+gdd_sine <- function(tmin, tmax, base) {
+  mapply(function(tmin, tmax, base) {
+    if (is.na(tmin) || is.na(tmax)) return(NA)
 
-gdd_sine <- function(tmin, tmax, base, upper) {
-  if (is.na(tmin) || is.na(tmax)) return(NA)
+    # swap min and max if in wrong order for some reason
+    if (tmin > tmax) { t = tmin; tmin = tmax; tmax = t }
 
-  # swap min and max if in wrong order for some reason
-  if (tmin > tmax) {
-    t = tmin
-    tmin = tmax
-    tmax = t
-  }
+    # min and max < lower
+    if (tmax <= base) return(0)
 
-  # min and max > upper
-  if (tmin >= upper) return(upper - base)
+    average = (tmin + tmax) / 2
 
-  # min and max < lower
-  if (tmax <= base) return(0)
+    # tmin > lower = simple average gdds
+    if (tmin >= base) return(average - base)
 
-  average = (tmin + tmax) / 2
-
-  # min and max between base and upper
-  if (tmax <= upper && tmin >= base) return(average - base)
-
-  alpha = (tmax - tmin) / 2
-
-  # min < base, max between base and upper
-  if (tmax <= upper && tmin < base) {
+    # tmin < lower, tmax > lower = sine gdds
+    alpha = (tmax - tmin) / 2
     base_radians = asin((base - average) / alpha)
     a = average - base
     b = pi / 2 - base_radians
     c = alpha * cos(base_radians)
-    return((1 / pi) * (a * b + c))
-  }
-
-  # max > upper and min between base and upper
-  if (tmax > upper && tmin >= base) {
-    upper_radians = asin((upper - average) / alpha)
-    a = average - base
-    b = upper_radians + pi / 2
-    c = upper - base
-    d = pi / 2 - upper_radians
-    e = alpha * cos(upper_radians)
-    return((1 / pi) * (a * b + c * d - e))
-  }
-
-  # max > upper and min < base
-  if (tmax > upper && tmin < base) {
-    base_radians = asin((base - average) / alpha)
-    upper_radians = asin((upper - average) / alpha)
-    a = average - base
-    b = upper_radians - base_radians
-    c = alpha * (cos(base_radians) - cos(upper_radians))
-    d = upper - base
-    e = pi / 2 - upper_radians
-    return((1 / pi) * ((a * b + c) + (d * e)))
-  }
+    (1 / pi) * (a * b + c)
+  }, tmin, tmax, base)
 }
 
 
@@ -278,21 +250,6 @@ withSpinnerProxy <- function(ui, ...) {
   ui %>% shinycssloaders::withSpinner(type = 8, color = "#30a67d", proxy.height = "400px", ...)
 }
 
-# buildPlotDlBtn <- function(id, fname, text = "Download plot image") {
-#   cmd <- paste0("this.disable; html2canvas(document.querySelector('", id, "'), {scale: 3}).then(canvas => {saveAs(canvas.toDataURL(), '", fname, "')}); this.enable;")
-#   p(
-#     class = "plot-caption",
-#     style = "margin: 15px;",
-#     align = "center",
-#     a(
-#       class = "btn btn-default btn-sm",
-#       style = "cursor: pointer;",
-#       onclick = cmd,
-#       text
-#     )
-#   )
-# }
-
 
 ## Helper functions ----
 
@@ -390,8 +347,8 @@ add_weather_cols <- function(.data) {
   .data %>%
     arrange(lat, lng, date) %>%
     mutate(
-      year = year(date),
-      yday = yday(date),
+      year = as.integer(year(date)),
+      yday = as.integer(yday(date)),
       mean_temp = rowMeans(pick(min_temp, max_temp)),
       frost = min_temp <= 32,
       freeze = min_temp <= 28,
@@ -401,6 +358,12 @@ add_weather_cols <- function(.data) {
       gdd41cum = cumsum(gdd41),
       gdd50cum = cumsum(gdd50),
       .by = c(lat, lng, year)
+    ) %>%
+    select(
+      lat, lng, date, year, yday,
+      min_temp, max_temp, mean_temp,
+      gdd41, gdd50, gdd41cum, gdd50cum,
+      frost, freeze, kill
     )
 }
 
@@ -419,9 +382,11 @@ get_weather_grid <- function(d = yesterday()) {
       inner_join(climate_grids, join_by(lat, lng)) %>%
       mutate(
         date = as_date(d),
-        gdd41 = calc_gdd(min_temp, max_temp, 41, 86),
-        gdd50 = calc_gdd(min_temp, max_temp, 50, 86)
-      )
+        gdd86 = gdd_sine(min_temp, max_temp, 86),
+        gdd41 = round(gdd_sine(min_temp, max_temp, 41) - gdd_86, 8),
+        gdd50 = round(gdd_sine(min_temp, max_temp, 50) - gdd_86, 8)
+      ) %>%
+      select(-gdd86)
   } else {
     message(str_glue("Failed to retrieve weather data for {d}"))
     tibble()
@@ -500,12 +465,6 @@ load_data <- function() {
       update_weather(dates, progress = T)
     }
   )
-  #
-  # withProgress(
-  #   message = "Updating weather...",
-  #   value = 0, min = 0, max = length(dates) + 1,
-  #
-  # )
 }
 
 
