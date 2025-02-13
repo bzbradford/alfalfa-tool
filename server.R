@@ -114,7 +114,7 @@ server <- function(input, output, session) {
     ),
     about = list(
       h3("About this app"),
-      includeMarkdown("about.Rmd")
+      includeMarkdown("about.md")
     )
   )
 

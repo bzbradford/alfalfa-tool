@@ -9,7 +9,7 @@ Traditionally, timing alfalfa cuttings is done based on a calendar or a grower's
 
 #### Gridded weather map
 
-Weather and climate data are presented on a 0.1 decimal degree grid (grid cells measure approximately 5 x 7 miles), with weather data originally sourced from NOAA and retrieved from <a href="https://agweather.cals.wisc.edu" target="_blank">AgWeather</a> and climate data sourced from <a href="https://www.climatologylab.org/gridmet.html" target="_blank">GridMET</a>. Clicking a grid cell will select that location for viewing in the charts and tools tabs.
+Weather and climate data are presented on a 0.1 decimal degree grid (grid cells measure approximately 5 x 7 miles), with weather data originally sourced from NOAA and retrieved from <a href="https://agweather.cals.wisc.edu" target="_blank">AgWeather</a> and climate data sourced from <a href="https://www.climatologylab.org/gridmet.html" target="_blank">GridMET</a> using the <a href="https://github.com/mikejohnson51/climateR" target="_blank">ClimateR</a> package. Clicking a grid cell will select that location for viewing in the charts and tools tabs.
 
 #### Weather and climate charts
 
