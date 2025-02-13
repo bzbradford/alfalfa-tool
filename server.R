@@ -36,6 +36,13 @@ server <- function(input, output, session) {
     )
   })
 
+  weather_missing <- reactive({
+    req(rv$weather_ready)
+    all_dates <- seq.Date(OPTS$weather_date_min, OPTS$weather_date_max, 1)
+    have_dates <- sort(unique(weather$date))
+    !setequal(all_dates, have_dates)
+  })
+
 
   # Initialize module servers ----
 
@@ -67,10 +74,18 @@ server <- function(input, output, session) {
       rv$weather_ready <- TRUE
     }
 
-    fluidRow(
-      column(6, h3("Weather and climate map"), mapUI()),
-      column(6, uiOutput("sidebar_ui"))
+    tagList(
+      uiOutput("warning_ui"),
+      fluidRow(
+        column(6, h3("Weather and climate map"), mapUI()),
+        column(6, uiOutput("sidebar_ui"))
+      )
     )
+  })
+
+  output$warning_ui <- renderUI({
+    req(weather_missing())
+    div(style = "color: red; font-weight: bold;", OPTS$load_error_msg)
   })
 
 

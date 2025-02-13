@@ -26,6 +26,25 @@ options(rsconnect.max.bundle.size = 5e9)
 
 # Utility functions ----
 
+# message and print an object to the console for testing
+echo <- function(x) {
+  message(deparse(substitute(x)), " <", typeof(x), ">")
+  print(x)
+}
+
+# swap names and values in a list
+invert <- function(x) {
+  y <- as(names(x), class(x))
+  names(y) <- x
+  y
+}
+
+# return the first truthy argument
+first_truthy <- function(...) {
+  for (arg in list(...)) if (shiny::isTruthy(arg)) return(arg)
+  NULL
+}
+
 # for agweather
 yesterday <- function() {
   as.Date(format(Sys.time() - 60 * 60, tz = "America/Chicago")) - 1
@@ -123,6 +142,16 @@ OPTS <- lst(
     "Upper Midwest" = "mw",
     "Wisconsin" = "wi"
   ),
+  basemaps = list(
+    "ESRI Topo" = providers$Esri.WorldTopoMap,
+    "Satellite" = providers$Esri.WorldImagery,
+    "OpenStreetMap" = providers$OpenStreetMap,
+    "Grey Canvas" = providers$CartoDB.Positron
+  ),
+  map_layers = list(
+    grid = "Data grid",
+    counties = "Counties/Regions"
+  ),
 
   # interface settings
   debounce_ms = 200,
@@ -142,8 +171,8 @@ OPTS <- lst(
     "Weather vs climate" = "comparison"
   ),
   climate_period_choices = list(
-    "10-year climate average (2013-2023)" = "c10",
-    "5-year climate average (2018-2023)" = "c5"
+    "10-year climate average (2014-2024)" = "c10",
+    "5-year climate average (2019-2025)" = "c5"
   ),
   climate_frost_choices = list(
     "Frost (<32°F)" = "frost",
@@ -167,6 +196,7 @@ OPTS <- lst(
   ),
 
   # boilerplate
+  load_error_msg = "Warning: Weather could not be loaded for all dates. Please contact the developer if you encounter any issues.",
   location_validation_msg = "Please select a location on the map first. Use the crosshair icon on the map to automatically select your location, or enter a place name in the searchbox below the map.",
   weather_plot_caption = "Today's date is indicated as a vertical dashed line. Click on any item in the plot legend to toggle it on or off. Click and drag on the plot to zoom in, double click to reset view. Click on the camera icon in the plot menu to download a copy of the plot.",
 
@@ -252,12 +282,6 @@ withSpinnerProxy <- function(ui, ...) {
 
 
 ## Helper functions ----
-
-invert <- function(x) {
-  y <- as(names(x), class(x))
-  names(y) <- x
-  y
-}
 
 # returns the label associated with a grid type and value
 get_col_label <- function(type, col) {
@@ -371,26 +395,28 @@ add_weather_cols <- function(.data) {
 get_weather_grid <- function(d = yesterday()) {
   url <- paste0("https://agweather.cals.wisc.edu/api/weather/grid?date=", d)
   message(d, " ==> GET ", url)
-  resp <- httr::GET(url) %>% httr::content()
-  data <- resp$data %>%
-    enframe() %>%
-    unnest_wider("value")
-  if (nrow(data) > 0) {
-    data %>%
+  wx <- tibble()
+  tryCatch({
+    resp <- httr::GET(url) %>% httr::content()
+    data <- resp$data %>%
+      enframe() %>%
+      unnest_wider("value")
+    if (nrow(data) == 0) stop()
+    wx <- data %>%
       fix_coords() %>%
       select(lat, lng, date, min_temp, max_temp) %>%
       inner_join(climate_grids, join_by(lat, lng)) %>%
       mutate(
         date = as_date(d),
         gdd86 = gdd_sine(min_temp, max_temp, 86),
-        gdd41 = round(gdd_sine(min_temp, max_temp, 41) - gdd_86, 8),
-        gdd50 = round(gdd_sine(min_temp, max_temp, 50) - gdd_86, 8)
+        gdd41 = round(gdd_sine(min_temp, max_temp, 41) - gdd86, 8),
+        gdd50 = round(gdd_sine(min_temp, max_temp, 50) - gdd86, 8)
       ) %>%
       select(-gdd86)
-  } else {
-    message(str_glue("Failed to retrieve weather data for {d}"))
-    tibble()
-  }
+  }, error = function(e) {
+    message(str_glue("Failed to retrieve weather data for {d}: {e}"))
+  })
+  wx
 }
 
 weather_dates <- function() {
@@ -501,11 +527,11 @@ if (!exists("counties_mw")) {
 # Testing ----
 
 # delete some weather for testing
-# weather <- weather %>% filter(date < Sys.Date() - 3)
+# weather <- weather %>% filter(date < Sys.Date() - 1)
 # weather %>%
-#   filter(year == 2024) %>%
+#   filter(year == 2025) %>%
 #   remove_weather_cols() %>%
-#   write_fst("data/weather_2024.fst", compress = 99)
+#   write_fst("data/weather_2025.fst", compress = 99)
 
 # weather
 #

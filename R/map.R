@@ -18,7 +18,13 @@ mapUI <- function() {
 
 mapSidebarUI <- function() {
   ns <- NS("map")
-  uiOutput(ns("map_opts_ui"))
+  div(
+    class = "well",
+    useBusyIndicators(spinners = F, pulse = F, fade = F),
+    uiOutput(ns("map_extent_ui")),
+    uiOutput(ns("type_ui")),
+    uiOutput(ns("type_opts_ui")),
+  )
 }
 
 mapServer <- function() {
@@ -39,7 +45,8 @@ mapServer <- function() {
         date_vals = NULL,
 
         # grid data and opts
-        grid_data = NULL
+        grid_data = NULL,
+        grid_pal = NULL
       )
 
 
@@ -51,148 +58,116 @@ mapServer <- function() {
         leafletProxy("map") %>% clearGroup(layers$grid)
       })
 
-
-      ## Main map options UI ----
-
-      output$map_opts_ui <- renderUI({
-        div(
-          class = "well",
-          useBusyIndicators(spinners = F, pulse = F, fade = F),
-          uiOutput(ns("map_extent_ui")),
-          uiOutput(ns("type_ui")),
-          uiOutput(ns("type_opts_ui")),
-          uiOutput(ns("value_opts_ui")),
-          uiOutput(ns("smoothing_opts_ui")),
-          div(
-            style = "min-width: 100%;",
-            uiOutput(ns("date_slider_ui")),
-            uiOutput(ns("date_btns_ui")),
-          ),
-          uiOutput(ns("display_opts_ui"))
-        )
-      })
-
-      ## map_extent_ui ----
+      ## Map extent UI ----
       output$map_extent_ui <- renderUI({
+        choices <- OPTS$map_extent_choices
         radioGroupButtons(
           ns("map_extent"), "Map extent",
-          choices = OPTS$map_extent_choices,
+          choices = choices,
+          selected = first_truthy(isolate(input$map_extent), first(choices)),
           size = "sm"
         )
       })
 
 
       ## Data type UI ----
-
       output$type_ui <- renderUI({
         choices <- OPTS$map_type_choices
         radioGroupButtons(
           ns("data_type"), "Choose data layer",
           choices = choices,
-          selected = coalesce(input$data_type, first(choices)),
+          selected = first_truthy(isolate(input$data_type), first(choices)),
           size = "sm"
         )
       })
 
 
       ## Year/Period options UI ----
-
       output$type_opts_ui <- renderUI({
         type <- req(input$data_type)
+
         elems <- list()
-        if (type %in% c("weather", "comparison")) {
-          elems$weather <- uiOutput(ns("weather_year_ui"))
+        elems$weather <- if (type %in% c("weather", "comparison")) {
+          radioGroupButtons(
+            ns("weather_year"), "Weather year",
+            choices = OPTS$weather_years,
+            selected = first_truthy(isolate(input$weather_year), as.character(cur_yr)),
+            size = "sm"
+          )
         }
-        if (type %in% c("climate", "comparison")) {
-          elems$climate <- uiOutput(ns("climate_period_ui"))
+        elems$climate <- if (type %in% c("climate", "comparison")) {
+          choices <- OPTS$climate_period_choices
+          radioGroupButtons(
+            ns("climate_period"), "Climate period",
+            choices = choices,
+            selected = first_truthy(isolate(input$climate_period), first(choices)),
+            size = "sm"
+          )
         }
 
-        div(class = "inline-flex", elems)
-      })
-
-      output$weather_year_ui <- renderUI({
-        radioGroupButtons(
-          ns("weather_year"), "Weather year",
-          choices = OPTS$weather_years,
-          selected = coalesce(input$weather_year, as.character(cur_yr)),
-          size = "sm"
-        )
-      })
-
-      output$climate_period_ui <- renderUI({
-        choices <- OPTS$climate_period_choices
-        radioGroupButtons(
-          ns("climate_period"), "Climate period",
-          choices = choices,
-          selected = coalesce(input$climate_period, first(choices)),
-          size = "sm"
+        tagList(
+          div(class = "inline-flex", elems),
+          uiOutput(ns("value_ui"))
         )
       })
 
 
       ## Data value options UI ----
+      output$value_ui <- renderUI({
+        elem <- switch(
+          req(input$data_type),
+          "weather" = {
+            choices <- OPTS$grid_cols$weather
+            selectInput(
+              ns("weather_value"), "Display value",
+              choices = choices,
+              selected = coalesce(input$weather_value, first(choices))
+            )
+          },
+          "climate" = {
+            choices <- OPTS$grid_cols$climate
+            selectInput(
+              ns("climate_value"), "Display value",
+              choices = choices,
+              selected = coalesce(input$climate_value, first(choices))
+            )
+          },
+          "comparison" = {
+            choices <- OPTS$grid_cols$comparison
+            selectInput(
+              ns("comparison_value"), "Display value",
+              choices = choices,
+              selected = coalesce(input$comparison_value, first(choices))
+            )
+          }
+        )
 
-      output$value_opts_ui <- renderUI({
-        type <- req(input$data_type)
-
-        if (type == "weather") {
-          uiOutput(ns("weather_value_ui"))
-        } else if (type == "climate") {
-          uiOutput(ns("climate_value_ui"))
-        } else if (type == "comparison") {
-          uiOutput(ns("comparison_value_ui"))
-        }
-      })
-
-      output$weather_value_ui <- renderUI({
-        choices <- OPTS$grid_cols$weather
-        selectInput(
-          ns("weather_value"), "Display value",
-          choices = choices,
-          selected = coalesce(input$weather_value, first(choices))
+        tagList(
+          elem,
+          uiOutput(ns("smoothing_ui")),
+          uiOutput(ns("date_slider_ui")),
+          uiOutput(ns("date_btns_ui")),
+          uiOutput(ns("display_opts_ui"))
         )
       })
-
-      output$climate_value_ui <- renderUI({
-        choices <- OPTS$grid_cols$climate
-        selectInput(
-          ns("climate_value"), "Display value",
-          choices = choices,
-          selected = coalesce(input$climate_value, first(choices))
-        )
-      })
-
-      output$comparison_value_ui <- renderUI({
-        choices <- OPTS$grid_cols$comparison
-        selectInput(
-          ns("comparison_value"), "Display value",
-          choices = choices,
-          selected = coalesce(input$comparison_value, first(choices))
-        )
-      })
-
 
       ## Smoothing options UI ----
-
-      output$smoothing_opts_ui <- renderUI({
+      output$smoothing_ui <- renderUI({
         type <- req(input$data_type)
         value <- req(input[[paste0(type, "_value")]])
-        if (value %in% OPTS$smoothable_cols) uiOutput(ns("smoothing_ui"))
-      })
-
-      output$smoothing_ui <- renderUI({
-        choices <- OPTS$data_smoothing_choices
-        radioGroupButtons(
-          ns("smoothing"), "Data smoothing",
-          choices = choices,
-          selected = coalesce(input$smoothing, first(choices)),
-          size = "sm"
-        )
+        if (value %in% OPTS$smoothable_cols) {
+          choices <- OPTS$data_smoothing_choices
+          radioGroupButtons(
+            ns("smoothing"), "Data smoothing",
+            choices = choices,
+            selected = first_truthy(isolate(input$smoothing), first(choices)),
+            size = "sm"
+          )
+        }
       })
 
 
       ## Date selector UI ----
-
       output$date_slider_ui <- renderUI({
         type <- req(input$data_type)
 
@@ -212,19 +187,22 @@ mapServer <- function() {
         opts$min <- start_of_year(opts$year)
         opts$max <- min(yesterday(), end_of_year(opts$year))
         opts$prev_dates <- rv$date_set
+        opts$prev_weather_date <- isolate(input$weather_date)
         opts$end_date <-
           coalesce(
             opts$prev_dates$end,
-            rev(weather_date())[1],
-            yesterday()) %>%
+            rev(opts$prev_weather_date)[1],
+            yesterday()
+          ) %>%
           align_dates(opts$min) %>%
           clamp(opts$min, opts$max)
         if (opts$value %in% OPTS$cumulative_cols) {
           opts$start_date <-
             coalesce(
               opts$prev_dates$start,
-              rev(weather_date())[2],
-              opts$min) %>%
+              rev(opts$prev_weather_date)[2],
+              opts$min
+            ) %>%
             align_dates(opts$min)
         }
         sliderInput(
@@ -244,20 +222,21 @@ mapServer <- function() {
         opts$min <- start_of_year()
         opts$max <- end_of_year()
         opts$prev_dates <- rv$date_set
-        opts$end_date <-
-          coalesce(
+        opts$prev_weather_date <- isolate(rv$weather_date)
+        opts$prev_climate_date <- isolate(rv$climate_date)
+        opts$end_date <- coalesce(
             opts$prev_dates$end,
-            rev(climate_date())[1],
-            rev(weather_date())[1],
-            yesterday()) %>%
+            rev(opts$prev_climate_date)[1],
+            rev(opts$prev_weather_date)[1],
+            yesterday()
+          ) %>%
           align_dates(opts$min) %>%
           clamp(opts$min, opts$max)
         if (opts$value %in% OPTS$cumulative_cols) {
-          opts$start_date <-
-            coalesce(
+          opts$start_date <- coalesce(
               opts$prev_dates$start,
-              rev(climate_date())[2],
-              rev(weather_date())[2],
+              rev(opts$prev_climate_date)[2],
+              rev(opts$prev_weather_date)[2],
               opts$min) %>%
             align_dates(opts$min)
         }
@@ -272,19 +251,16 @@ mapServer <- function() {
 
       ### Debounced date values ----
 
-      weather_date <- reactive(input$weather_date) %>%
-        debounce(OPTS$debounce_ms)
-
-      climate_date <- reactive(input$climate_date) %>%
-        debounce(OPTS$debounce_ms)
+      # weather_date <- reactive(input$weather_date) %>% debounce(OPTS$debounce_ms)
+      # climate_date <- reactive(input$climate_date) %>% debounce(OPTS$debounce_ms)
 
       grid_date <- reactive({
         if (req(input$data_type) == "climate") {
-          climate_date()
+          input$climate_date
         } else {
-          weather_date()
+          input$weather_date
         }
-      })
+      }) %>% debounce(500)
 
       # store date slider values in rv
       observe({
@@ -367,11 +343,12 @@ mapServer <- function() {
       })
 
       output$legend_range <- renderUI({
+        grid_pal <- req(rv$grid_pal)
         opts <- list()
         if (isTRUE(input$legend_autoscale)) {
           opts$style <- "display:none;"
-          opts$min <- grid_pal()$domain[1]
-          opts$max <- grid_pal()$domain[2]
+          opts$min <- grid_pal$domain[1]
+          opts$max <- grid_pal$domain[2]
         } else {
           opts$style <- "display:inline-flex; gap:10px;"
           opts$min <- input$legend_min
@@ -398,27 +375,16 @@ mapServer <- function() {
 
       # MAP --------------------------------------------------------------------
 
-      basemaps <- tribble(
-        ~label, ~provider,
-        "ESRI Topo", providers$Esri.WorldTopoMap,
-        "Satellite", providers$Esri.WorldImagery,
-        "OpenStreetMap", providers$OpenStreetMap,
-        "Grey Canvas", providers$CartoDB.Positron
-      )
+      layers <- OPTS$map_layers
 
-      addBasemaps <- function(map) {
-        for (r in 1:nrow(basemaps)) {
-          df <- slice(basemaps, r)
-          map <- addProviderTiles(map, df$provider, group = df$label)
-        }
-        map
+      fit_extent <- function(map, extent = first(OPTS$map_extent_choices)) {
+        bounds <- OPTS$map_extent[[extent]]
+        map %>%
+          fitBounds(
+            lat1 = bounds$lat[1], lat2 = bounds$lat[2],
+            lng1 = bounds$lng[1], lng2 = bounds$lng[2]
+          )
       }
-
-      layers <- list(
-        grid = "Data grid",
-        counties = "Counties/Regions"
-      )
-
 
       ## Map title ----
 
@@ -437,16 +403,37 @@ mapServer <- function() {
 
       ## Initialize map ----
 
-      fit_extent <- function(map, extent = first(OPTS$map_extent_choices)) {
-        bounds <- OPTS$map_extent[[extent]]
-        map %>%
-          fitBounds(
-            lat1 = bounds$lat[1], lat2 = bounds$lat[2],
-            lng1 = bounds$lng[1], lng2 = bounds$lng[2]
-          )
-      }
-
       output$map <- renderLeaflet({
+        # js buttons
+        js_for <- function(target) JS(paste0("function(btn, map) { Shiny.setInputValue('map-easy_btn', '", target, "', {priority: 'event'}); }"))
+        btn1 <- easyButton(
+          title = "Show my location on the map",
+          icon = "fa-location",
+          position = "topleft",
+          onClick = js_for("user_loc")
+        )
+        btn2 <- easyButton(
+          title = "Zoom to selected grid (if any)",
+          icon = "fa-search-location",
+          position = "topleft",
+          onClick = js_for("zoom_grid")
+        )
+        btn3 <- easyButton(
+          title = "Reset map view",
+          icon = "fa-globe",
+          position = "topleft",
+          onClick = js_for("zoom_extent")
+        )
+
+        # for adding basemaps
+        basemaps <- OPTS$basemaps
+        addBasemaps <- function(map) {
+          for (name in names(basemaps))
+            map <- addProviderTiles(map, basemaps[[name]], group = name)
+          map
+        }
+
+        # render map
         leaflet(options = leafletOptions(preferCanvas = T)) %>%
           fit_extent() %>%
           addBasemaps() %>%
@@ -454,42 +441,11 @@ mapServer <- function() {
           addMapPane("grid", 420) %>%
           addMapPane("selected_grid", 430) %>%
           addLayersControl(
-            baseGroups = basemaps$label,
+            baseGroups = names(basemaps),
             overlayGroups = unlist(layers, use.names = F),
             options = layersControlOptions(collapsed = T)
           ) %>%
-          addEasyButtonBar(
-            easyButton(
-              position = "topleft",
-              icon = "fa-location",
-              title = "Show my location on the map",
-              onClick = JS("
-                function(btn, map) {
-                  Shiny.setInputValue('map-easy_btn', 'user_loc', {priority: 'event'});
-                }
-              ")
-            ),
-            easyButton(
-              position = "topleft",
-              icon = "fa-search-location",
-              title = "Zoom to selected grid (if any)",
-              onClick = JS("
-                function(btn, map) {
-                  Shiny.setInputValue('map-easy_btn', 'zoom_grid', {priority: 'event'});
-                }
-              ")
-            ),
-            easyButton(
-              position = "topleft",
-              icon = "fa-globe",
-              title = "Reset map view",
-              onClick = JS("
-                function(btn, map) {
-                  Shiny.setInputValue('map-easy_btn', 'zoom_extent', {priority: 'event'});
-                }
-              ")
-            )
-          ) %>%
+          addEasyButtonBar(btn1, btn2, btn3) %>%
           # assign leaflet map object to global var 'map'
           htmlwidgets::onRender("() => { map = this; }") %>%
           suspendScroll(
@@ -507,10 +463,10 @@ mapServer <- function() {
       observe({
         extent <- req(input$map_extent)
         map <- leafletProxy("map")
+        map %>% clearGroup(layers$counties)
 
         if (extent == "wi") {
           map %>%
-            clearGroup(layers$counties) %>%
             addPolygons(
               data = counties_wi,
               group = layers$counties,
@@ -524,7 +480,6 @@ mapServer <- function() {
             )
         } else {
           map %>%
-            clearGroup(layers$counties) %>%
             addPolygons(
               data = counties_mw,
               group = layers$counties,
@@ -647,8 +602,6 @@ mapServer <- function() {
       }
 
 
-
-
       ## Set grid data and opts ----
       observe({
         opts <- list()
@@ -662,13 +615,11 @@ mapServer <- function() {
         opts$value_label <- get_col_label(opts$type, opts$col)
 
         # set grid data
-        grid <-
-          if (opts$type == "weather") {
-            prepare_weather_grid_data(opts)
-          } else if (opts$type == "climate") {
-            opts$period <- req(input$climate_period)
-            prepare_climate_grid_data(opts)
-          } else if (opts$type == "comparison") {
+        grid <- switch(
+          opts$type,
+          "weather" = prepare_weather_grid_data(opts),
+          "climate" = prepare_climate_grid_data(opts),
+          "comparison" = {
             opts$period <- req(input$climate_period)
             wx <- prepare_weather_grid_data(opts) %>% rename(c(wx_value = value))
             cl <- prepare_climate_grid_data(opts) %>% rename(c(cl_value = value))
@@ -676,6 +627,7 @@ mapServer <- function() {
               left_join(wx, join_by(lat, lng)) %>%
               mutate(value = wx_value - cl_value)
           }
+        )
 
         # prepare grid labels
         grid <- grid %>% mutate(
@@ -697,11 +649,12 @@ mapServer <- function() {
 
 
       ## Set grid domain and palette ----
-      grid_pal <- reactive({
+      observe({
         grid <- req(rv$grid_data$grid)
         opts <- req(rv$grid_data$opts)
         opts$autoscale <- isTRUE(input$legend_autoscale)
 
+        rv$grid_pal <- NULL
         req(nrow(grid) > 0)
 
         # percent frost/freeze palette
@@ -725,7 +678,7 @@ mapServer <- function() {
           )
         }
 
-        list(
+        rv$grid_pal <- list(
           domain = opts$domain,
           pal = colorNumeric(opts$colors, opts$domain, reverse = TRUE),
           pal_rev = colorNumeric(opts$colors, opts$domain, reverse = FALSE)
@@ -735,10 +688,18 @@ mapServer <- function() {
 
       ## Draw grid on map ----
       observe({
+        map <- leafletProxy(ns("map"))
+
+        grid <- req(rv$grid_data$grid)
+        if (nrow(grid) == 0) {
+          clearGroup(map, layers$grid)
+          return()
+        }
+
         grid <- req(rv$grid_data$grid)
         opts <- append(
           req(rv$grid_data$opts),
-          grid_pal()
+          req(rv$grid_pal)
         )
 
         # make sure date slider is correctly single or double ended
@@ -749,7 +710,7 @@ mapServer <- function() {
           mutate(pal_value = mapply(clamp, value, opts$domain[1], opts$domain[2])) %>%
           mutate(fill = opts$pal(pal_value))
 
-        leafletProxy(ns("map")) %>%
+        map %>%
           addRectangles(
             data = grid,
             lat1 = ~lat - .05, lat2 = ~lat + .05,
@@ -778,13 +739,16 @@ mapServer <- function() {
 
       # selects only if within bounds
       select_grid <- function(lat, lng) {
-        new_lat = round(lat, 1)
-        new_lng = round(lng, 1)
-        matching_grid <- req(rv$grid_data$grid) %>%
-          filter(lat == new_lat, lng == new_lng)
-        if (nrow(matching_grid) > 0) {
-          rv$selected_grid <- list(lat = new_lat, lng = new_lng)
+        lat = round(lat, 1)
+        lng = round(lng, 1)
+        if (in_extent(lat, lng, req(input$map_extent))) {
+          rv$selected_grid <- list(lat = lat, lng = lng)
         }
+        # matching_grid <- req(rv$grid_data$grid) %>%
+        #   filter(lat == new_lat, lng == new_lng)
+        # if (nrow(matching_grid) > 0) {
+        #   rv$selected_grid <- list(lat = new_lat, lng = new_lng)
+        # }
       }
 
       ## Handle map click ----
@@ -805,8 +769,10 @@ mapServer <- function() {
         grid <- req(rv$grid_data$grid) %>%
           filter(lat == loc$lat, lng == loc$lng)
 
-        control_str <- str_glue("<b>Selected grid: {grid$grid_str}</b><br>{opts$value_label}: {grid$value_str}")
-        grid_str <- str_glue("<b>{grid$grid_str}</b> (selected)<br>{opts$value_label}: {grid$value_str}")
+        loc_str <- sprintf("%.1f°N, %.1f°W", loc$lat, loc$lng)
+        value_str <- paste0(opts$value_label, ": ", grid$value_str)
+        control_str <- paste0("<b>Selected grid: ", loc_str, "</b><br>", value_str)
+        grid_str <- paste0("<b>", loc_str, " (selected)</b><br>", value_str)
 
         map %>%
           addControl(
@@ -815,12 +781,15 @@ mapServer <- function() {
             layerId = "selected_coords"
           ) %>%
           addRectangles(
-            data = grid,
-            lat1 = ~lat - .05, lat2 = ~lat + .05,
-            lng1 = ~lng - .05, lng2 = ~lng + .05,
+            lat1 = loc$lat - .05,
+            lat2 = loc$lat + .05,
+            lng1 = loc$lng - .05,
+            lng2 = loc$lng + .05,
             group = layers$grid,
             layerId = "selected",
-            weight = .5, opacity = 1, color = "black",
+            weight = .5,
+            opacity = 1,
+            color = "black",
             fillOpacity = 0,
             label = HTML(grid_str),
             options = pathOptions(pane = "selected_grid")
