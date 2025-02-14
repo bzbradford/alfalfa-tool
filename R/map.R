@@ -114,8 +114,7 @@ mapServer <- function() {
 
       ## Data value options UI ----
       output$value_ui <- renderUI({
-        elem <- switch(
-          req(input$data_type),
+        elem <- switch(req(input$data_type),
           "weather" = {
             choices <- OPTS$grid_cols$weather
             selectInput(
@@ -225,19 +224,20 @@ mapServer <- function() {
         opts$prev_weather_date <- isolate(rv$weather_date)
         opts$prev_climate_date <- isolate(rv$climate_date)
         opts$end_date <- coalesce(
-            opts$prev_dates$end,
-            rev(opts$prev_climate_date)[1],
-            rev(opts$prev_weather_date)[1],
-            yesterday()
-          ) %>%
+          opts$prev_dates$end,
+          rev(opts$prev_climate_date)[1],
+          rev(opts$prev_weather_date)[1],
+          yesterday()
+        ) %>%
           align_dates(opts$min) %>%
           clamp(opts$min, opts$max)
         if (opts$value %in% OPTS$cumulative_cols) {
           opts$start_date <- coalesce(
-              opts$prev_dates$start,
-              rev(opts$prev_climate_date)[2],
-              rev(opts$prev_weather_date)[2],
-              opts$min) %>%
+            opts$prev_dates$start,
+            rev(opts$prev_climate_date)[2],
+            rev(opts$prev_weather_date)[2],
+            opts$min
+          ) %>%
             align_dates(opts$min)
         }
         sliderInput(
@@ -286,7 +286,8 @@ mapServer <- function() {
       output$date_btns_ui <- renderUI({
         tagList(
           tags$label("Date adjustment"),
-          div(class = "date-btns",
+          div(
+            class = "date-btns",
             actionButton(ns("date_earlier_7"), "-7"),
             actionButton(ns("date_earlier_1"), "-1"),
             actionButton(ns("date_later_1"), "+1"),
@@ -332,7 +333,8 @@ mapServer <- function() {
       output$display_opts_ui <- renderUI({
         div(
           tags$label("Display options"),
-          div(class = "map-display-opts",
+          div(
+            class = "map-display-opts",
             checkboxInput(
               ns("legend_autoscale"), "Autoscale map legend",
               value = TRUE
@@ -428,8 +430,9 @@ mapServer <- function() {
         # for adding basemaps
         basemaps <- OPTS$basemaps
         addBasemaps <- function(map) {
-          for (name in names(basemaps))
+          for (name in names(basemaps)) {
             map <- addProviderTiles(map, basemaps[[name]], group = name)
+          }
           map
         }
 
@@ -474,7 +477,7 @@ mapServer <- function() {
               color = "grey",
               weight = 0.5,
               opacity = 0.5,
-              fillColor = ~colorFactor("Dark2", dnr_region)(dnr_region),
+              fillColor = ~ colorFactor("Dark2", dnr_region)(dnr_region),
               fillOpacity = 0.05,
               options = pathOptions(pane = "counties")
             )
@@ -487,7 +490,7 @@ mapServer <- function() {
               color = "grey",
               weight = 1,
               opacity = 0.25,
-              fillColor = ~colorFactor(OPTS$factor_colors, state)(state),
+              fillColor = ~ colorFactor(OPTS$factor_colors, state)(state),
               fillOpacity = 0.1,
               options = pathOptions(pane = "counties")
             )
@@ -534,7 +537,9 @@ mapServer <- function() {
           df %>%
             filter(between(date, opts$date[1] - opts$smoothing / 2, opts$date[1] + opts$smoothing / 2)) %>%
             summarize(value = mean(value), .by = c(lat, lng))
-        } else filter(df, date == opts$date[1])
+        } else {
+          filter(df, date == opts$date[1])
+        }
         df2 <- if (length(opts$date) == 2) filter(df, date == opts$date[2])
         prepare_grid_data(df1, df2, opts$col)
       }
@@ -581,7 +586,9 @@ mapServer <- function() {
         .data %>% mutate(
           label = paste0(
             str_glue("<b>{lat}°N, {lng}°W</b>"),
-            { if (selected) " (Selected)"},
+            {
+              if (selected) " (Selected)"
+            },
             "<br>",
             if (opts$type == "weather" & opts$col %in% c("frost", "freeze")) {
               sprintf("%s: %s", prefix, value)
@@ -618,8 +625,7 @@ mapServer <- function() {
         }
 
         # set grid data
-        grid <- switch(
-          opts$type,
+        grid <- switch(opts$type,
           "weather" = prepare_weather_grid_data(opts),
           "climate" = prepare_climate_grid_data(opts),
           "comparison" = {
@@ -644,7 +650,7 @@ mapServer <- function() {
             } else {
               sprintf("%.1f", value)
             }
-          )
+        )
 
         rv$grid_data <- list(grid = grid, opts = opts)
       })
@@ -715,14 +721,14 @@ mapServer <- function() {
         map %>%
           addRectangles(
             data = grid,
-            lat1 = ~lat - .05, lat2 = ~lat + .05,
-            lng1 = ~lng - .05, lng2 = ~lng + .05,
+            lat1 = ~ lat - .05, lat2 = ~ lat + .05,
+            lng1 = ~ lng - .05, lng2 = ~ lng + .05,
             group = layers$grid,
-            layerId = ~coords_to_pt(lat, lng),
+            layerId = ~ coords_to_pt(lat, lng),
             weight = 0,
             fillOpacity = .75,
             fillColor = ~fill,
-            label = ~str_glue("<b>{grid_str}</b><br>{opts$value_label}: {value_str}") %>%
+            label = ~ str_glue("<b>{grid_str}</b><br>{opts$value_label}: {value_str}") %>%
               lapply(shiny::HTML),
             options = pathOptions(pane = "grid")
           ) %>%
@@ -741,8 +747,8 @@ mapServer <- function() {
 
       # selects only if within bounds
       select_grid <- function(lat, lng) {
-        lat = round(lat, 1)
-        lng = round(lng, 1)
+        lat <- round(lat, 1)
+        lng <- round(lng, 1)
         if (in_extent(lat, lng, req(input$map_extent))) {
           rv$selected_grid <- list(lat = lat, lng = lng)
         }
@@ -897,7 +903,8 @@ mapServer <- function() {
           div(
             style = "display: inline-flex; gap: 5px; max-width: 100%;",
             textInput(
-              ns("coord_search"), label = NULL,
+              ns("coord_search"),
+              label = NULL,
               placeholder = "Enter coordinates"
             ),
             div(
@@ -926,7 +933,6 @@ mapServer <- function() {
         grid_data = rv$grid_data,
         selected_grid = rv$selected_grid
       )))
-
     } # end module
   )
 }

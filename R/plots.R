@@ -91,7 +91,9 @@ plotServer <- function(loc_data) {
           gdd_type = req(input$weather_gdd)
         )
         opts$title <- paste(
-          { if (opts$year != "All") opts$year else paste(rev(OPTS$weather_years), collapse = "-") },
+          {
+            if (opts$year != "All") opts$year else paste(rev(OPTS$weather_years), collapse = "-")
+          },
           sprintf("Weather data for %.1f°N, %.1f°W", opts$loc$lat, opts$loc$lng)
         )
         df <- loc_data()$weather
@@ -103,7 +105,8 @@ plotServer <- function(loc_data) {
           layout(
             title = list(
               text = opts$title,
-              yanchor = "bottom"),
+              yanchor = "bottom"
+            ),
             legend = OPTS$plot_legend,
             xaxis = OPTS$plot_date_axis_weather,
             hovermode = "x unified",
@@ -123,10 +126,11 @@ plotServer <- function(loc_data) {
           ) %>%
           add_temp_traces(df, "y1")
 
-        if (opts$gdd_type == "Cumulative")
+        if (opts$gdd_type == "Cumulative") {
           plt <- add_gdd_cum_traces(plt, df, "y2")
-        else if (opts$gdd_type == "Daily")
+        } else if (opts$gdd_type == "Daily") {
           plt <- add_gdd_daily_traces(plt, df, "y2")
+        }
 
         if (opts$year == "All") opts$year <- cur_yr
         plt %>% add_today(yr = opts$year, date_yr = opts$year)
@@ -188,13 +192,15 @@ plotServer <- function(loc_data) {
           layout(
             title = list(
               text = opts$title,
-              yanchor = "bottom"),
+              yanchor = "bottom"
+            ),
             legend = OPTS$plot_legend,
             xaxis = OPTS$plot_date_axis_climate,
             hovermode = "x unified",
             margin = list(t = 50),
             modebar = list(
-              remove = list("pan", "select", "lasso", "zoom", "autoscale"))
+              remove = list("pan", "select", "lasso", "zoom", "autoscale")
+            )
           ) %>%
           config(
             toImageButtonOptions = list(
@@ -236,7 +242,8 @@ plotServer <- function(loc_data) {
                   ),
                   uiOutput(ns("y1_opts"))
                 ),
-                column(6,
+                column(
+                  6,
                   selectInput(
                     ns("y2_elems"), "Secondary plot data",
                     choices = append(
@@ -248,7 +255,6 @@ plotServer <- function(loc_data) {
                   uiOutput(ns("y2_opts"))
                 )
               )
-
             ),
             open = "Plot options"
           ),
@@ -268,7 +274,9 @@ plotServer <- function(loc_data) {
             smoothing = first(c(input[[id("smoothing")]], first(OPTS$data_smoothing_choices)))
           )
 
-          if (i$elems == "none") return()
+          if (i$elems == "none") {
+            return()
+          }
 
           # show either the weather year or climate period
           elems <- list()
@@ -312,7 +320,6 @@ plotServer <- function(loc_data) {
       }
 
       output$custom_plot <- renderPlotly({
-
         # capture inputs
         elems <- list(
           y1 = req(input$y1_elems),
@@ -324,7 +331,9 @@ plotServer <- function(loc_data) {
             data = str_split_1(elems[[y]], "_")[1],
             traces = str_split_1(elems[[y]], "_")[2]
           )
-          if (i$data == "none") return()
+          if (i$data == "none") {
+            return()
+          }
           i$smoothing <- as.numeric(req(input[[id("smoothing")]]))
           if (i$data == "weather") {
             i$year <- req(input[[id("year")]])
@@ -346,13 +355,15 @@ plotServer <- function(loc_data) {
           layout(
             title = list(
               text = opts$title,
-              yanchor = "bottom"),
+              yanchor = "bottom"
+            ),
             legend = OPTS$plot_legend,
             xaxis = OPTS$plot_date_axis_climate,
             hovermode = "x unified",
             margin = list(t = 50),
             modebar = list(
-              remove = list("pan", "select", "lasso", "zoom", "autoscale"))
+              remove = list("pan", "select", "lasso", "zoom", "autoscale")
+            )
           ) %>%
           config(
             toImageButtonOptions = list(
@@ -407,7 +418,6 @@ plotServer <- function(loc_data) {
 
         plt %>% add_today(yr = coalesce(opts$year, ""))
       })
-
     } # end module
   )
 }

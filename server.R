@@ -1,7 +1,6 @@
 #- server.R -#
 
 server <- function(input, output, session) {
-
   OPTS$weather_date_max <- yesterday()
   OPTS$climate_date_min <- start_of_year()
   OPTS$climate_date_max <- end_of_year()
@@ -40,7 +39,10 @@ server <- function(input, output, session) {
     req(rv$weather_ready)
     all_dates <- seq.Date(OPTS$weather_date_min, OPTS$weather_date_max, 1)
     have_dates <- sort(unique(weather$date))
-    !setequal(all_dates, have_dates)
+    diff <- setdiff(all_dates, have_dates)
+    missing <- length(diff) > 0
+    if (missing) message("Missing dates: ", paste(as_date(diff), collapse = ", "))
+    missing
   })
 
 
@@ -128,5 +130,4 @@ server <- function(input, output, session) {
       sidebar_pages[[page]]
     }
   })
-
 }

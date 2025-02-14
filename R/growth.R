@@ -15,7 +15,7 @@ growthServer <- function(loc_data) {
       ns <- session$ns
 
       rv <- reactiveValues(
-        initial_date = yesterday() - 28,
+        initial_date = OPTS$growth_default_date,
         loc_ready = FALSE
       )
 
@@ -42,7 +42,7 @@ growthServer <- function(loc_data) {
         tagList(
           uiOutput(ns("options_ui")),
           plotlyOutput(ns("plot"), height = "500px"),
-          div(class = "plot-caption", "Today's date is indicated as a vertical dashed line. Green zone represents optimal cut timing (900-1100 GDD since last cutting), blue zone (0-360 GDD) represents maximum grow-back since last cut and before first freeze. Ideally alfalfa should not be allowed to grow outside of this zone after the last fall cutting. Click and drag on plot to zoom in, double-click to reset. Click the camera icon in the plot menu to download a copy.")
+          div(class = "plot-caption", OPTS$growth_plot_caption)
         )
       })
 
@@ -52,11 +52,14 @@ growthServer <- function(loc_data) {
           actionButton(ns(id), label, class = "btn-sm", style = "height:35px; margin:5px;")
         }
 
-        div(class = "well", style = "padding-bottom: 0px;",
-          div(class = "inline-flex",
+        div(
+          class = "well", style = "padding-bottom: 0px;",
+          div(
+            class = "inline-flex",
             div(
               div(tags$label("Date of last cut")),
-              div(class = "inline-flex", style = "gap: 5px;",
+              div(
+                class = "inline-flex", style = "gap: 5px;",
                 uiOutput(ns("date_ui")),
                 div(
                   btn("date_jan1", "Jan 1"),
@@ -77,8 +80,8 @@ growthServer <- function(loc_data) {
 
       ## date_ui ----
       output$date_ui <- renderUI({
-        min_date <- today() - 180
-        max_date <- today() + 180
+        min_date <- OPTS$growth_min_date
+        max_date <- OPTS$growth_max_date
         value <- clamp(rv$initial_date, min_date, max_date)
         dateInput(
           inputId = ns("cut_date"),
@@ -90,9 +93,16 @@ growthServer <- function(loc_data) {
         )
       })
 
-      observeEvent(input$date_jan1, { rv$initial_date <- start_of_year() })
-      observeEvent(input$date_today, { rv$initial_date <- yesterday() + 1 })
-      observeEvent(input$date_reset, { rv$initial_date <- yesterday() - 28 })
+      ## handle date buttons ----
+      observeEvent(input$date_jan1, {
+        rv$initial_date <- start_of_year()
+      })
+      observeEvent(input$date_today, {
+        rv$initial_date <- yesterday() + 1
+      })
+      observeEvent(input$date_reset, {
+        rv$initial_date <- OPTS$growth_default_date
+      })
 
 
       # Generate plot data ----
@@ -107,7 +117,7 @@ growthServer <- function(loc_data) {
       })
 
 
-      # Plot ----
+      # Render plot ----
       output$plot <- renderPlotly({
         args <- list(
           df = req(rv$plot_data),
@@ -115,7 +125,6 @@ growthServer <- function(loc_data) {
         )
         do.call(buildGrowthPlot, args)
       })
-
     }
   )
 }
@@ -169,7 +178,7 @@ buildGrowthPlot <- function(df, loc) {
   thresholds <- seq(800, 1200, by = 100)
   thresholds <- thresholds[thresholds < last(df$gdd_since_cut)]
   threshold_dates <- sapply(thresholds, function(gdd) {
-    df[which.min(abs(gdd - df$gdd_since_cut)),]$date
+    df[which.min(abs(gdd - df$gdd_since_cut)), ]$date
   })
   if (length(threshold_dates) > 0) {
     threshold_dates <- as_date(threshold_dates)
@@ -278,7 +287,7 @@ buildGrowthPlot <- function(df, loc) {
     plt <- plt %>%
       add_annotations(
         data = kill_annot,
-        x = ~date, y = ~kill_by * 100, yref = "y2",
+        x = ~date, y = ~ kill_by * 100, yref = "y2",
         text = ~label,
         ax = 40, ay = 30,
         arrowsize = .5,
@@ -291,7 +300,8 @@ buildGrowthPlot <- function(df, loc) {
       legend = OPTS$plot_legend,
       title = list(
         text = opts$title,
-        yanchor = "bottom"),
+        yanchor = "bottom"
+      ),
       xaxis = list(
         title = "Date",
         # dtick = 1000 * 60 * 60 * 24 * 7,
@@ -300,12 +310,14 @@ buildGrowthPlot <- function(df, loc) {
         gridwidth = .5,
         tickformat = "%b %d",
         hoverformat = "%b %d, %Y (day %j)",
-        domain = c(0, .95)),
+        domain = c(0, .95)
+      ),
       yaxis = list(
         title = "Growing degree days (base 41°F)",
         fixedrange = T,
         gridwidth = .5,
-        range = opts$yrange),
+        range = opts$yrange
+      ),
       yaxis2 = opts$y2,
       hovermode = "x unified",
       margin = list(t = 50),
@@ -327,8 +339,3 @@ buildGrowthPlot <- function(df, loc) {
     plt %>% layout(shapes = cut_zones)
   }
 }
-
-
-
-
-

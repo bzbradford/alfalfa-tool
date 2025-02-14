@@ -6,7 +6,6 @@ ui <- navbarPage(
   theme = shinytheme("flatly"),
   # position = "fixed-top",
   collapsible = TRUE,
-
   header = tagList(
     tags$head(
       tags$meta(charset = "UTF-8"),
@@ -25,14 +24,12 @@ ui <- navbarPage(
       )
     )
   ),
-
   tabPanel("Weather Map", icon = icon("map"), value = "map"),
   tabPanel("Growth Projection", icon = icon("leaf"), value = "growth"),
   tabPanel("Season Planning", icon = icon("tractor"), value = "timing"),
   tabPanel("Weather Charts", icon = icon("chart-line"), value = "charts"),
   tabPanel("Downloads", icon = icon("download"), value = "downloads"),
   tabPanel("About", icon = icon("question"), value = "about"),
-
   footer = tags$footer(
     class = "footer-container",
     div(

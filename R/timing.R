@@ -47,7 +47,7 @@ timingServer <- function(loc_data) {
         freq <- as.numeric(req(input$cut_freq))
         cuts <- seq(freq, max(df$gdd_since_kill), by = freq)
         days <- sapply(cuts, function(gdd) {
-          df[which.min(abs(gdd - df$gdd_since_kill)),]$yday
+          df[which.min(abs(gdd - df$gdd_since_kill)), ]$yday
         })
         days <- days[between(days, 60, 300)]
         pause_date_reader()
@@ -77,8 +77,10 @@ timingServer <- function(loc_data) {
         div(
           class = "well",
           fluidRow(
-            column(6,
-              div(class = "inline-flex",
+            column(
+              6,
+              div(
+                class = "inline-flex",
                 radioButtons(
                   ns("year"), "Year",
                   choices = OPTS$weather_years
@@ -107,7 +109,8 @@ timingServer <- function(loc_data) {
           div(
             style = "display: inline-flex; gap: 20px;",
             selectInput(
-              ns("cut_freq"), label = NULL,
+              ns("cut_freq"),
+              label = NULL,
               choices = OPTS$cut_freq_choices,
               selected = OPTS$cut_freq_default,
               width = "100px"
@@ -282,7 +285,7 @@ timingServer <- function(loc_data) {
       output$plot <- renderPlotly({
         opts <- list()
         opts$year <- req(input$year)
-        opts$climate = req(input$period)
+        opts$climate <- req(input$period)
         opts$loc <- req(rv$loc)
         opts$title <- sprintf("%s Alfalfa cutting schedule for %.1f°N, %.1f°W", opts$year, opts$loc$lat, opts$loc$lng)
 
@@ -381,7 +384,7 @@ timingServer <- function(loc_data) {
           ) %>%
           add_trace(
             name = "Cumul. killing freeze prob.",
-            x = ~date, y = ~kill_by * 100, yaxis = "y2",
+            x = ~date, y = ~ kill_by * 100, yaxis = "y2",
             type = "scatter", mode = "lines", hovertemplate = "%{y:.1f}%",
             line = list(color = "purple", width = 1.5)
           ) %>%
@@ -401,12 +404,14 @@ timingServer <- function(loc_data) {
             legend = OPTS$plot_legend,
             title = list(
               text = opts$title,
-              yanchor = "bottom"),
+              yanchor = "bottom"
+            ),
             xaxis = OPTS$plot_date_axis_weather,
             yaxis = list(
               title = "Growing degree days (base 41°F)",
               fixedrange = T,
-              range = c(0, 5000)),
+              range = c(0, 5000)
+            ),
             yaxis2 = list(
               title = "Cumul. killing freeze prob. (<24°F)",
               overlaying = "y",
@@ -414,11 +419,13 @@ timingServer <- function(loc_data) {
               zeroline = F,
               showgrid = F,
               fixedrange = T,
-              range = c(0, 100)),
+              range = c(0, 100)
+            ),
             hovermode = "x unified",
             margin = list(t = 50),
             modebar = list(
-              remove = list("pan", "select", "lasso", "zoom", "autoscale"))
+              remove = list("pan", "select", "lasso", "zoom", "autoscale")
+            )
           ) %>%
           config(
             toImageButtonOptions = list(
@@ -438,7 +445,6 @@ timingServer <- function(loc_data) {
 
         plt %>% add_today(yr = opts$year, date_yr = opts$year, other_shapes = cut_zones)
       })
-
     } # end module
   )
 }

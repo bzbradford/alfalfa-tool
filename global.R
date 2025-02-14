@@ -18,10 +18,13 @@
 # shiny::devmode(TRUE)
 # shiny::devmode(FALSE)
 
+# styler::style_dir()
+
 
 #- Dependencies ----
 
-suppressMessages({
+suppressPackageStartupMessages({
+  library(styler)
   library(tidyverse) # core
   library(sf) # spatial
   library(fst) # file storage
@@ -36,7 +39,7 @@ suppressMessages({
   library(leaflet) # map
   library(leaflet.extras) # map JS buttons
   library(plotly) # plots
-  library(markdown) #includeMarkdown
+  library(markdown) # includeMarkdown
   library(RColorBrewer)
 })
 
@@ -61,7 +64,9 @@ invert <- function(x) {
 
 # return the first truthy argument
 first_truthy <- function(...) {
-  for (arg in list(...)) if (shiny::isTruthy(arg)) return(arg)
+  for (arg in list(...)) if (shiny::isTruthy(arg)) {
+    return(arg)
+  }
   NULL
 }
 
@@ -91,7 +96,9 @@ align_dates <- function(target_date, ref_date) {
 }
 
 clamp <- function(x, left, right) {
-  if (is.null(x)) return(NULL)
+  if (is.null(x)) {
+    return(NULL)
+  }
   min(max(left, x), right)
 }
 
@@ -104,25 +111,35 @@ clamp <- function(x, left, right) {
 #' @returns single sine growing degree days for one day
 gdd_sine <- function(tmin, tmax, base) {
   mapply(function(tmin, tmax, base) {
-    if (is.na(tmin) || is.na(tmax)) return(NA)
+    if (is.na(tmin) || is.na(tmax)) {
+      return(NA)
+    }
 
     # swap min and max if in wrong order for some reason
-    if (tmin > tmax) { t = tmin; tmin = tmax; tmax = t }
+    if (tmin > tmax) {
+      t <- tmin
+      tmin <- tmax
+      tmax <- t
+    }
 
     # min and max < lower
-    if (tmax <= base) return(0)
+    if (tmax <= base) {
+      return(0)
+    }
 
-    average = (tmin + tmax) / 2
+    average <- (tmin + tmax) / 2
 
     # tmin > lower = simple average gdds
-    if (tmin >= base) return(average - base)
+    if (tmin >= base) {
+      return(average - base)
+    }
 
     # tmin < lower, tmax > lower = sine gdds
-    alpha = (tmax - tmin) / 2
-    base_radians = asin((base - average) / alpha)
-    a = average - base
-    b = pi / 2 - base_radians
-    c = alpha * cos(base_radians)
+    alpha <- (tmax - tmin) / 2
+    base_radians <- asin((base - average) / alpha)
+    a <- average - base
+    b <- pi / 2 - base_radians
+    c <- alpha * cos(base_radians)
     (1 / pi) * (a * b + c)
   }, tmin, tmax, base)
 }
@@ -133,11 +150,12 @@ gdd_sine <- function(tmin, tmax, base) {
 google_key <- Sys.getenv("google_places_key")
 # style <- read_file("www/style.css") %>% str_replace_all("[\r\n]", " ")
 cur_yr <- year(yesterday())
-min_yr <- 2023
+min_yr <- cur_yr - 2
+
 OPTS <- lst(
   # leaflet color palette
   factor_colors = {
-    qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+    qual_col_pals <- brewer.pal.info[brewer.pal.info$category == "qual", ]
     unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
   },
 
@@ -215,28 +233,26 @@ OPTS <- lst(
     "Climate - Frost/freeze/kill prob." = "climate_frost"
   ),
 
-  # boilerplate
-  load_error_msg = "Warning: Weather could not be loaded for all dates. Please contact the developer if you encounter any issues.",
-  location_validation_msg = "Please select a location on the map first. Use the crosshair icon on the map to automatically select your location, or enter a place name in the searchbox below the map.",
-  weather_plot_caption = "Today's date is indicated as a vertical dashed line. Click on any item in the plot legend to toggle it on or off. Click and drag on the plot to zoom in, double click to reset view. Click on the camera icon in the plot menu to download a copy of the plot.",
-
   # plotly settings
   plot_date_axis_climate = list(
     title = "Date",
     dtick = "M1",
     tickformat = "%b",
     hoverformat = "%b %d (day %j)",
-    domain = c(0, .95)),
+    domain = c(0, .95)
+  ),
   plot_date_axis_weather = list(
     title = "Date",
     dtick = "M1",
     tickformat = "%b",
     hoverformat = "%b %d, %Y (day %j)",
-    domain = c(0, .95)),
+    domain = c(0, .95)
+  ),
   plot_legend = list(
     orientation = "h",
     xanchor = "center",
-    x = .5, y = -.15),
+    x = .5, y = -.15
+  ),
   plot_line_width = 1.5,
   plot_colors = list(
     min_temp = "cornflowerblue",
@@ -262,6 +278,8 @@ OPTS <- lst(
   percent_cols = c("frost", "freeze", "kill", "frost_by", "freeze_by", "kill_by"),
   comparison_cols = c("min_temp", "max_temp", "mean_temp", "gdd41", "gdd50"),
   smoothable_cols = c("min_temp", "max_temp", "mean_temp", "gdd41", "gdd50", "frost", "freeze", "kill", "frost_by", "freeze_by", "kill_by"),
+
+  # column names
   grid_cols = list(
     weather = list(
       "Mean temperature (°F)" = "mean_temp",
@@ -296,7 +314,18 @@ OPTS <- lst(
       "Cumul. GDD41 vs climate average" = "gdd41cum",
       "Cumul. GDD50 vs climate average" = "gdd50cum"
     )
-  )
+  ),
+
+  # growth projection
+  growth_min_date = make_date(cur_yr - 1, 6, 1),
+  growth_max_date = today() + 180,
+  growth_default_date = today() - 28,
+
+  # messages
+  load_error_msg = "Warning: Weather could not be loaded for all dates. Please contact the developer if you encounter any issues.",
+  location_validation_msg = "Please select a location on the map first. Use the crosshair icon on the map to automatically select your location, or enter a place name in the searchbox below the map.",
+  weather_plot_caption = "Today's date is indicated as a vertical dashed line. Click on any item in the plot legend to toggle it on or off. Click and drag on the plot to zoom in, double click to reset view. Click on the camera icon in the plot menu to download a copy of the plot.",
+  growth_plot_caption = "Today's date is indicated as a vertical dashed line. Green zone represents optimal cut timing (900-1100 GDD since last cutting), blue zone (0-360 GDD) represents maximum grow-back since last cut and before first freeze. Ideally alfalfa should not be allowed to grow outside of this zone after the last fall cutting. Click and drag on plot to zoom in, double-click to reset. Click the camera icon in the plot menu to download a copy.",
 )
 
 
@@ -381,10 +410,12 @@ add_climate_cols <- function(.data) {
 
 smooth_cols <- function(.data, width, cols = OPTS$smoothable_cols) {
   width <- as.numeric(width)
-  if (width == 1) return(.data)
+  if (width == 1) {
+    return(.data)
+  }
   mutate(.data, across(
     any_of(cols),
-    ~zoo::rollapply(.x, width = width, FUN = mean, na.rm = T, partial = T)
+    ~ zoo::rollapply(.x, width = width, FUN = mean, na.rm = T, partial = T)
   ))
 }
 
@@ -395,14 +426,13 @@ remove_weather_cols <- function(.data) {
 
 add_weather_cols <- function(.data) {
   .data %>%
-    arrange(lat, lng, date) %>%
     mutate(
-      year = as.integer(year(date)),
-      yday = as.integer(yday(date)),
-      mean_temp = rowMeans(pick(min_temp, max_temp)),
+      year = year(date),
+      yday = yday(date),
       frost = min_temp <= 32,
       freeze = min_temp <= 28,
-      kill = min_temp <= 24
+      kill = min_temp <= 24,
+      mean_temp = rowMeans(pick(min_temp, max_temp))
     ) %>%
     mutate(
       gdd41cum = cumsum(gdd41),
@@ -417,31 +447,39 @@ add_weather_cols <- function(.data) {
     )
 }
 
+# weather %>%
+#   remove_weather_cols() %>%
+#   add_weather_cols()
+
+
 # units: temp=F, pressure=kPa, rh=%
 get_weather_grid <- function(d = yesterday()) {
   url <- paste0("https://agweather.cals.wisc.edu/api/weather/grid?date=", d)
   message(d, " ==> GET ", url)
   wx <- tibble()
-  tryCatch({
-    resp <- httr::GET(url) %>% httr::content()
-    data <- resp$data %>%
-      enframe() %>%
-      unnest_wider("value")
-    if (nrow(data) == 0) stop()
-    wx <- data %>%
-      fix_coords() %>%
-      select(lat, lng, date, min_temp, max_temp) %>%
-      inner_join(climate_grids, join_by(lat, lng)) %>%
-      mutate(
-        date = as_date(d),
-        gdd86 = gdd_sine(min_temp, max_temp, 86),
-        gdd41 = round(gdd_sine(min_temp, max_temp, 41) - gdd86, 8),
-        gdd50 = round(gdd_sine(min_temp, max_temp, 50) - gdd86, 8)
-      ) %>%
-      select(-gdd86)
-  }, error = function(e) {
-    message(str_glue("Failed to retrieve weather data for {d}: {e}"))
-  })
+  tryCatch(
+    {
+      resp <- httr::GET(url) %>% httr::content()
+      data <- resp$data %>%
+        enframe() %>%
+        unnest_wider("value")
+      if (nrow(data) == 0) stop()
+      wx <- data %>%
+        fix_coords() %>%
+        select(lat, lng, date, min_temp, max_temp) %>%
+        inner_join(climate_grids, join_by(lat, lng)) %>%
+        mutate(
+          date = as_date(d),
+          gdd86 = gdd_sine(min_temp, max_temp, 86),
+          gdd41 = round(gdd_sine(min_temp, max_temp, 41) - gdd86, 8),
+          gdd50 = round(gdd_sine(min_temp, max_temp, 50) - gdd86, 8)
+        ) %>%
+        select(-gdd86)
+    },
+    error = function(e) {
+      message(str_glue("Failed to retrieve weather data for {d}: {e}"))
+    }
+  )
   wx
 }
 
@@ -464,7 +502,7 @@ load_climate <- function() {
       lapply(as_tibble) %>%
       lapply(add_climate_cols)
   }
-  if(!exists("climate_grids")) {
+  if (!exists("climate_grids")) {
     climate_grids <<- climate$c10 %>% distinct(lat, lng)
   }
 }
@@ -501,6 +539,7 @@ update_weather <- function(dates = weather_dates(), progress = FALSE) {
     weather %>%
       filter(year == yr) %>%
       remove_weather_cols() %>%
+      arrange(lat, lng, date) %>%
       write_fst(str_glue("data/weather_{yr}.fst"), compress = 99)
   })
 }
@@ -508,7 +547,9 @@ update_weather <- function(dates = weather_dates(), progress = FALSE) {
 load_data <- function() {
   withProgress(
     message = "Loading datasets...",
-    value = 0, min = 0, max = 3,
+    value = 0,
+    min = 0,
+    max = 3,
     {
       load_climate()
       load_weather()

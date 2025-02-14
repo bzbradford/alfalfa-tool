@@ -36,9 +36,16 @@ downloadsServer <- function(grid_data, loc_data) {
       grid_csv_name <- reactive({
         opts <- req(grid_data()$opts)
         paste0(
-          toupper(opts$extent), " ", opts$type, " grid - ",
-          gsub("_", " ", opts$col), " for ", opts$date,
-          { if (opts$smoothing > 1) paste0(" (", opts$smoothing, "-day avg)") }
+          toupper(opts$extent),
+          " ",
+          opts$type,
+          " grid - ",
+          gsub("_", " ", opts$col),
+          " for ",
+          opts$date,
+          {
+            if (opts$smoothing > 1) paste0(" (", opts$smoothing, "-day avg)")
+          }
         )
       })
 
@@ -139,7 +146,6 @@ downloadsServer <- function(grid_data, loc_data) {
             write_excel_csv(content, file, append = T, col_names = T, na = "")
           }
         )
-
       }
 
       output$loc_c5_csv <- climate_csv_handler(5)
@@ -154,8 +160,6 @@ downloadsServer <- function(grid_data, loc_data) {
       #   filename = function() paste0("10-year climate for ", loc_str(), ".csv"),
       #   content = function(file) write_csv(loc_data()$c10, file)
       # )
-
     }
   )
 }
-
