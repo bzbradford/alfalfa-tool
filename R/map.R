@@ -613,6 +613,9 @@ mapServer <- function() {
         date_len <- ifelse(opts$col %in% OPTS$cumulative_cols, 2, 1)
         req(length(opts$date) == date_len)
         opts$value_label <- get_col_label(opts$type, opts$col)
+        if (opts$type %in% c("climate", "comparison")) {
+          opts$period <- req(input$climate_period)
+        }
 
         # set grid data
         grid <- switch(
@@ -620,7 +623,6 @@ mapServer <- function() {
           "weather" = prepare_weather_grid_data(opts),
           "climate" = prepare_climate_grid_data(opts),
           "comparison" = {
-            opts$period <- req(input$climate_period)
             wx <- prepare_weather_grid_data(opts) %>% rename(c(wx_value = value))
             cl <- prepare_climate_grid_data(opts) %>% rename(c(cl_value = value))
             cl %>%

@@ -1,7 +1,27 @@
-#- global.R -#
+## Alfalfa Weather Tool ##
+# Ben Bradford, UW-Madison
+
+
+#- Renv ----
+
+# renv::init()         # initiate renv if not already
+# renv::status()       # project status
+# renv::dependencies() # show project dependencies
+# renv::clean()        # remove unused packages
+# renv::update()       # update project libraries
+# renv::snapshot()     # save updated lock file to project
+# renv::restore()      # restore versions from lockfile
+
+
+#- Testing ----
+
+# shiny::devmode(TRUE)
+# shiny::devmode(FALSE)
+
+
+#- Dependencies ----
 
 suppressMessages({
-  # library(rlang) # walrus operator
   library(tidyverse) # core
   library(sf) # spatial
   library(fst) # file storage
@@ -71,7 +91,7 @@ align_dates <- function(target_date, ref_date) {
 }
 
 clamp <- function(x, left, right) {
-  if (is.null(x)) return()
+  if (is.null(x)) return(NULL)
   min(max(left, x), right)
 }
 
@@ -139,8 +159,8 @@ OPTS <- lst(
     )
   ),
   map_extent_choices = list(
-    "Upper Midwest" = "mw",
-    "Wisconsin" = "wi"
+    "Wisconsin" = "wi",
+    "Upper Midwest" = "mw"
   ),
   basemaps = list(
     "ESRI Topo" = providers$Esri.WorldTopoMap,
@@ -172,7 +192,7 @@ OPTS <- lst(
   ),
   climate_period_choices = list(
     "10-year climate average (2014-2024)" = "c10",
-    "5-year climate average (2019-2025)" = "c5"
+    "5-year climate average (2019-2024)" = "c5"
   ),
   climate_frost_choices = list(
     "Frost (<32°F)" = "frost",
@@ -229,6 +249,12 @@ OPTS <- lst(
     gdd50 = "peru",
     gdd41cum = "olivedrab",
     gdd50cum = "chocolate"
+  ),
+  plot_export_opts = list(
+    format = "png",
+    height = 600,
+    width = 1000,
+    scale = 2.5
   ),
 
   # column defs

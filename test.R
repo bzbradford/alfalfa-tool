@@ -1,5 +1,3 @@
-
-
 # weather plot
 
 loc <- list(lat = 45, lng = -89)
@@ -36,14 +34,14 @@ df %>%
   ) %>%
   add_trace(
     name = "Frost (<32F)",
-    x = ~date, y = ~if_else(min_temp <= 32, 32, NA),
+    x = ~date, y = ~ if_else(min_temp <= 32, 32, NA),
     type = "scatter", mode = "lines",
     hovertemplate = "Yes",
     line = list(color = "orchid")
   ) %>%
   add_trace(
     name = "Hard freeze (<28F)",
-    x = ~date, y = ~if_else(min_temp <= 28, 28, NA),
+    x = ~date, y = ~ if_else(min_temp <= 28, 28, NA),
     type = "scatter", mode = "lines",
     hovertemplate = "Yes",
     line = list(color = "purple")
@@ -87,7 +85,8 @@ df <- climate$c10 %>%
   filter(lat == loc$lat, lng == loc$lng) %>%
   mutate(across(
     c(frost, freeze),
-    ~zoo::rollapply(.x, width = 14, by = 1, mean, na.rm = T, partial = T))) %>%
+    ~ zoo::rollapply(.x, width = 14, by = 1, mean, na.rm = T, partial = T)
+  )) %>%
   mutate(date = start_of_year() + yday - 1)
 
 df %>%
@@ -118,7 +117,7 @@ df %>%
   ) %>%
   add_trace(
     name = "Frost probability",
-    x = ~date, y = ~frost*100,
+    x = ~date, y = ~ frost * 100,
     type = "scatter", mode = "lines",
     hovertemplate = "%{y:.1f}%",
     line = list(color = "orchid", shape = "spline"),
@@ -126,7 +125,7 @@ df %>%
   ) %>%
   add_trace(
     name = "Hard freeze probability",
-    x = ~date, y = ~freeze*100,
+    x = ~date, y = ~ freeze * 100,
     type = "scatter", mode = "lines",
     hovertemplate = "%{y:.1f}%",
     line = list(color = "purple", shape = "spline"),
@@ -134,7 +133,7 @@ df %>%
   ) %>%
   add_trace(
     name = "Cumulative freeze prob.",
-    x = ~date, y = ~freeze_by*100,
+    x = ~date, y = ~ freeze_by * 100,
     type = "scatter", mode = "lines",
     hovertemplate = "%{y:.1f}%",
     line = list(color = "purple", shape = "spline"),
@@ -156,9 +155,11 @@ df %>%
       tickformat = "%b",
       hoverformat = "%b %d",
       automargin = T,
-      domain = c(0, .9)),
+      domain = c(0, .9)
+    ),
     yaxis = list(
-      title = "Temperature (F)"),
+      title = "Temperature (F)"
+    ),
     yaxis2 = list(
       title = "Frost/freeze probability (%)",
       overlaying = "y",
@@ -246,13 +247,14 @@ df %>%
   ) %>%
   add_trace(
     name = "Hard freeze prob.",
-    x = ~date, y = ~freeze_by*100,
+    x = ~date, y = ~ freeze_by * 100,
     type = "scatter", mode = "lines",
     hovertemplate = "%{y:.1f}%",
     line = list(
       color = "purple",
       shape = "spline",
-      width = 1.5),
+      width = 1.5
+    ),
     yaxis = "y2"
   ) %>%
   layout(
@@ -275,6 +277,18 @@ df %>%
 
 # find gdd closest to 500
 
-df[which.min(abs(1000 - df$gdd41cum)),]
+df[which.min(abs(1000 - df$gdd41cum)), ]
 
 
+
+
+# Growth plot -------------------------------------------------------------
+
+test_loc <- list(lat = 45, lng = -89)
+test_wx <- weather %>% filter(lat == test_loc$lat, lng == test_loc$lng)
+test_cl <- climate$c10 %>% filter(lat == test_loc$lat, lng == test_loc$lng)
+
+buildGrowthPlotData(test_wx, test_cl, as_date("2025-4-15"))
+test_data <- buildGrowthPlotData(test_wx, test_cl, as_date("2024-11-13"))
+
+buildGrowthPlot(test_data, test_loc)

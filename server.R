@@ -2,9 +2,9 @@
 
 server <- function(input, output, session) {
 
-  OPTS$weather_date_max = yesterday()
-  OPTS$climate_date_min = start_of_year()
-  OPTS$climate_date_max = end_of_year()
+  OPTS$weather_date_max <- yesterday()
+  OPTS$climate_date_min <- start_of_year()
+  OPTS$climate_date_max <- end_of_year()
 
 
   # Reactive values ----
