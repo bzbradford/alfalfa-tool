@@ -47,7 +47,7 @@ suppressPackageStartupMessages({
 options(rsconnect.max.bundle.size = 5e9)
 
 
-# Utility functions ----
+# Utility functions -------------------------------------------------------
 
 # message and print an object to the console for testing
 echo <- function(x) {
@@ -102,6 +102,10 @@ clamp <- function(x, left, right) {
   min(max(left, x), right)
 }
 
+
+
+# GDD calculation ---------------------------------------------------------
+
 #' Single sine method
 #' to create GDDs with an upper threshold, calculate GDDs with the upper threshold
 #' as the base temperature and subtract that value from the GDDs for the base temp
@@ -145,7 +149,8 @@ gdd_sine <- function(tmin, tmax, base) {
 }
 
 
-# Defs ----
+
+# Settings ----------------------------------------------------------------
 
 google_key <- Sys.getenv("google_places_key")
 # style <- read_file("www/style.css") %>% str_replace_all("[\r\n]", " ")
@@ -325,18 +330,19 @@ OPTS <- lst(
   load_error_msg = "Warning: Weather could not be loaded for all dates. Please contact the developer if you encounter any issues.",
   location_validation_msg = "Please select a location on the map first. Use the crosshair icon on the map to automatically select your location, or enter a place name in the searchbox below the map.",
   weather_plot_caption = "Today's date is indicated as a vertical dashed line. Click on any item in the plot legend to toggle it on or off. Click and drag on the plot to zoom in, double click to reset view. Click on the camera icon in the plot menu to download a copy of the plot.",
-  growth_plot_caption = "Today's date is indicated as a vertical dashed line. Green zone represents optimal cut timing (900-1100 GDD since last cutting), blue zone (0-360 GDD) represents maximum grow-back since last cut and before first freeze. Ideally alfalfa should not be allowed to grow outside of this zone after the last fall cutting. Click and drag on plot to zoom in, double-click to reset. Click the camera icon in the plot menu to download a copy.",
+  growth_info = "This tool estimates alfalfa growth since the last cutting using observed weather values prior and climate averages. Date estimates for certain degree-day thresholds and killing freeze risks will be provided.",
+  growth_plot_caption = "Today's date is indicated as a vertical dashed line. Green zone represents optimal cut timing (900-1100 GDD since last cutting), blue zone (0-360 GDD) represents maximum grow-back since last cut and before first freeze. Ideally alfalfa should not be allowed to grow outside of this zone after the last fall cutting. Click and drag on plot to zoom in, double-click to reset. Download using the camera icon in the plot menu.",
+  timing_info = "Traditionally, timing alfalfa cuttings is done based on a calendar or a grower's knowledge or experience. This tool helps to plan or evaluate a cutting schedule based on actual and projected growing degree days to identify optimal cut timing for plant health. During the growing season, alfalfa is generally cut when between 800 and 1100 growing degree days (base 41°F) have elapsed since spring regrowth or last cutting. In the fall, the last cut should be scheduled such that either the crop has enough time to reach maturity again before a killing freeze or has very little time (<360 GDD) before the first killing freeze.",
+  timing_plot_caption = "Today's date is indicated as a vertical dashed line. Future degree-day accumulation estimated based on climate average GDD/day. Dark green zone represents optimal cut timing (900-1100 GDD since last cutting), blue zone (0-360 GDD) represents acceptable grow-back since last cut and before first freeze. Click and drag on plot to zoom in, double-click to reset. Click the camera icon in the plot menu to download a copy.",
 )
 
 
-## UI builders ----
+
+# Helper functions --------------------------------------------------------
 
 withSpinnerProxy <- function(ui, ...) {
   ui %>% shinycssloaders::withSpinner(type = 8, color = "#30a67d", proxy.height = "400px", ...)
 }
-
-
-## Helper functions ----
 
 # returns the label associated with a grid type and value
 get_col_label <- function(type, col) {
@@ -419,6 +425,10 @@ smooth_cols <- function(.data, width, cols = OPTS$smoothable_cols) {
   ))
 }
 
+
+
+# Weather handling --------------------------------------------------------
+
 remove_weather_cols <- function(.data) {
   drop_cols <- c("year", "yday", "mean_temp", "frost", "freeze", "kill", "gdd41cum", "gdd50cum", "inwi")
   .data %>% select(-any_of(drop_cols))
@@ -446,11 +456,6 @@ add_weather_cols <- function(.data) {
       frost, freeze, kill
     )
 }
-
-# weather %>%
-#   remove_weather_cols() %>%
-#   add_weather_cols()
-
 
 # units: temp=F, pressure=kPa, rh=%
 get_weather_grid <- function(d = yesterday()) {
@@ -490,8 +495,8 @@ weather_dates <- function() {
 }
 
 
-# Data load functions ----
 
+# Data loaders ------------------------------------------------------------
 
 load_climate <- function() {
   if (!exists("climate")) {
@@ -561,7 +566,233 @@ load_data <- function() {
 }
 
 
-# Initialize data ----
+
+# Plot helpers ------------------------------------------------------------
+
+# plotly horizontal line annotation
+hline <- function(y = 0, color = "black", dash = "dash", alpha = .5) {
+  list(
+    type = "line", xref = "paper",
+    x0 = 0, x1 = 1, y0 = y, y1 = y,
+    line = list(color = color, dash = dash),
+    opacity = alpha
+  )
+}
+
+# plotly rectanglular annotation
+rect <- function(ymin, ymax, color = "red") {
+  list(
+    type = "rect",
+    fillcolor = color,
+    line = list(color = color),
+    opacity = 0.1,
+    xref = "x domain",
+    x0 = 0, x1 = 1,
+    y0 = ymin, y1 = ymax,
+    layer = "below"
+  )
+}
+
+add_today <- function(plt, yr = cur_yr, date_yr = cur_yr, other_shapes = list()) {
+  x <- align_dates(yesterday() + 1, date_yr)
+  text <- if (yr == cur_yr) "Today" else format(x, "%b %d")
+  vline <- list(list(
+    type = "line", yref = "y domain",
+    x0 = x, x1 = x, y0 = 0, y1 = .95,
+    line = list(color = "black", dash = "dash"),
+    opacity = .25
+  ))
+  text <- list(list(
+    yref = "y domain",
+    x = x, y = 1,
+    text = text,
+    showarrow = F,
+    opacity = .5
+  ))
+  shapes <- c(other_shapes, vline)
+  plt %>% layout(shapes = shapes, annotations = text)
+}
+
+set_axis <- function(plt, yaxis, title) {
+  axis <- list(
+    title = title,
+    zeroline = F,
+    fixedrange = T
+  )
+  if (yaxis == "y1") {
+    plt %>% layout(yaxis = axis)
+  } else {
+    axis$overlaying <- "y"
+    axis$side <- "right"
+    axis$showgrid <- F
+    plt %>% layout(yaxis2 = axis)
+  }
+}
+
+add_temp_traces <- function(plt, df, yaxis = "y1", label = "", dash = F) {
+  dash <- ifelse(dash, "dashdot", "none")
+  width <- OPTS$plot_line_width
+  plt %>%
+    add_trace(
+      name = paste0(label, "Min temp"), x = df$date, y = df$min_temp, yaxis = yaxis,
+      type = "scatter", mode = "lines", hovertemplate = "%{y:.1f}°F",
+      line = list(color = OPTS$plot_colors$min_temp, width = width, shape = "spline", dash = dash)
+    ) %>%
+    add_trace(
+      name = paste0(label, "Mean temp"), x = df$date, y = df$mean_temp, yaxis = yaxis,
+      type = "scatter", mode = "lines", hovertemplate = "%{y:.1f}°F",
+      line = list(color = OPTS$plot_colors$mean_temp, width = width, shape = "spline", dash = dash)
+    ) %>%
+    add_trace(
+      name = paste0(label, "Max temp"), x = df$date, y = df$max_temp, yaxis = yaxis,
+      type = "scatter", mode = "lines", hovertemplate = "%{y:.1f}°F",
+      line = list(color = OPTS$plot_colors$max_temp, width = width, shape = "spline", dash = dash)
+    ) %>%
+    add_trace(
+      name = paste0(label, "Frost (<32°F)"),
+      x = df$date, y = if_else(df$min_temp <= 32, 32, NA), yaxis = yaxis,
+      type = "scatter", mode = "lines", hovertemplate = "Yes",
+      line = list(color = OPTS$plot_colors$frost, width = width, dash = dash)
+    ) %>%
+    add_trace(
+      name = paste0(label, "Hard freeze (<28°F)"),
+      x = df$date, y = if_else(df$min_temp <= 28, 28, NA), yaxis = yaxis,
+      type = "scatter", mode = "lines", hovertemplate = "Yes",
+      line = list(color = OPTS$plot_colors$freeze, width = width, dash = dash)
+    ) %>%
+    add_trace(
+      name = paste0(label, "Killing freeze (<24°F)"),
+      x = df$date, y = if_else(df$min_temp <= 24, 24, NA), yaxis = yaxis,
+      type = "scatter", mode = "lines", hovertemplate = "Yes",
+      line = list(color = OPTS$plot_colors$kill, width = width, dash = dash)
+    ) %>%
+    set_axis(yaxis, "Temperature (°F)")
+}
+
+add_gdd_daily_traces <- function(plt, df, yaxis = "y1", label = "", dash = F) {
+  dash <- ifelse(dash, "dashdot", "none")
+  width <- OPTS$plot_line_width
+  plt %>%
+    add_trace(
+      name = paste(label, "GDD41/day"), x = df$date, y = df$gdd41, yaxis = yaxis,
+      type = "scatter", mode = "lines", hovertemplate = "%{y:.1f}",
+      line = list(color = OPTS$plot_colors$gdd41, width = width, dash = dash)
+    ) %>%
+    add_trace(
+      name = paste(label, "GDD50/day"), x = df$date, y = df$gdd50, yaxis = yaxis,
+      type = "scatter", mode = "lines", hovertemplate = "%{y:.1f}",
+      line = list(color = OPTS$plot_colors$gdd50, width = width, dash = dash)
+    ) %>%
+    set_axis(yaxis, "GDD accumulation/day")
+}
+
+add_gdd_cum_traces <- function(plt, df, yaxis = "y1", label = "", dash = F) {
+  dash <- ifelse(dash, "dashdot", "none")
+  width <- OPTS$plot_line_width
+
+  plt %>%
+    add_trace(
+      name = paste0(label, "GDD41 (cumul.)"), x = df$date, y = df$gdd41cum, yaxis = yaxis,
+      type = "scatter", mode = "lines", hovertemplate = "%{y:.1f}",
+      line = list(color = OPTS$plot_colors$gdd41cum, width = width, dash = dash)
+    ) %>%
+    add_trace(
+      name = paste0(label, "GDD50 (cumul.)"), x = df$date, y = df$gdd50cum, yaxis = yaxis,
+      type = "scatter", mode = "lines", hovertemplate = "%{y:.1f}",
+      line = list(color = OPTS$plot_colors$gdd50cum, width = width, dash = dash)
+    ) %>%
+    set_axis(yaxis, "Cumulative GDD")
+}
+
+add_frost_traces <- function(plt, df, yaxis = "y1") {
+  width <- OPTS$plot_line_width
+  color <- OPTS$plot_colors$frost
+  plt %>%
+    add_trace(
+      name = "Frost probability", x = df$date, y = df$frost * 100, yaxis = yaxis,
+      type = "scatter", mode = "lines", hovertemplate = "%{y:.1f}%",
+      line = list(color = color, width = width, shape = "spline")
+    ) %>%
+    add_trace(
+      name = "Cumul. frost prob.", x = df$date, y = df$frost_by * 100, yaxis = yaxis,
+      type = "scatter", mode = "lines", hovertemplate = "%{y:.1f}%",
+      line = list(color = color, width = width, shape = "spline", dash = "dot")
+    ) %>%
+    set_axis(yaxis, "Frost probability (<32°F)")
+}
+
+add_freeze_traces <- function(plt, df, yaxis = "y1") {
+  width <- OPTS$plot_line_width
+  color <- OPTS$plot_color$freeze
+  plt %>%
+    add_trace(
+      name = "Hard freeze probability", x = df$date, y = df$freeze * 100, yaxis = yaxis,
+      type = "scatter", mode = "lines", hovertemplate = "%{y:.1f}%",
+      line = list(color = color, width = width, shape = "spline")
+    ) %>%
+    add_trace(
+      name = "Cumul. freeze prob.", x = df$date, y = df$freeze_by * 100, yaxis = yaxis,
+      type = "scatter", mode = "lines", hovertemplate = "%{y:.1f}%",
+      line = list(color = color, width = width, shape = "spline", dash = "dot")
+    ) %>%
+    set_axis(yaxis, "Hard freeze probability (<28°F)")
+}
+
+add_kill_traces <- function(plt, df, yaxis = "y1") {
+  width <- OPTS$plot_line_width
+  color <- OPTS$plot_colors$kill
+  plt %>%
+    add_trace(
+      name = "Killing freeze prob.", x = df$date, y = df$kill * 100, yaxis = yaxis,
+      type = "scatter", mode = "lines", hovertemplate = "%{y:.1f}%",
+      line = list(color = color, width = width, shape = "spline")
+    ) %>%
+    add_trace(
+      name = "Cumul. killing freeze prob.", x = df$date, y = df$kill_by * 100, yaxis = yaxis,
+      type = "scatter", mode = "lines", hovertemplate = "%{y:.1f}%",
+      line = list(color = color, width = width, shape = "spline", dash = "dot")
+    ) %>%
+    set_axis(yaxis, "Killing freeze probability (<24°F)")
+}
+
+add_frost_freeze_kill_traces <- function(plt, df, yaxis = "y1") {
+  width <- OPTS$plot_line_width
+  plt %>%
+    add_trace(
+      name = "Frost probability", x = df$date, y = df$frost * 100, yaxis = yaxis,
+      type = "scatter", mode = "lines", hovertemplate = "%{y:.1f}%",
+      line = list(color = OPTS$plot_colors$frost, width = width, shape = "spline")
+    ) %>%
+    add_trace(
+      name = "Hard freeze probability", x = df$date, y = df$freeze * 100, yaxis = yaxis,
+      type = "scatter", mode = "lines", hovertemplate = "%{y:.1f}%",
+      line = list(color = OPTS$plot_colors$freeze, width = width, shape = "spline")
+    ) %>%
+    add_trace(
+      name = "Killing freeze probability", x = df$date, y = df$kill * 100, yaxis = yaxis,
+      type = "scatter", mode = "lines", hovertemplate = "%{y:.1f}%",
+      line = list(color = OPTS$plot_colors$kill, width = width, shape = "spline")
+    ) %>%
+    add_trace(
+      name = "Cumul. frost prob.", x = df$date, y = df$frost_by * 100, yaxis = yaxis,
+      type = "scatter", mode = "lines", hovertemplate = "%{y:.1f}%",
+      line = list(color = OPTS$plot_colors$frost, width = width, shape = "spline", dash = "dot")
+    ) %>%
+    add_trace(
+      name = "Cumul. freeze prob.", x = df$date, y = df$freeze_by * 100, yaxis = yaxis,
+      type = "scatter", mode = "lines", hovertemplate = "%{y:.1f}%",
+      line = list(color = OPTS$plot_colors$freeze, width = width, shape = "spline", dash = "dot")
+    ) %>%
+    add_trace(
+      name = "Cumul. kill prob.", x = df$date, y = df$kill_by * 100, yaxis = yaxis,
+      type = "scatter", mode = "lines", hovertemplate = "%{y:.1f}%",
+      line = list(color = OPTS$plot_colors$kill, width = width, shape = "spline", dash = "dot")
+    ) %>%
+    set_axis(yaxis, "Frost/freeze/kill probability")
+}
+
+
+# Initialize data ---------------------------------------------------------
 
 list.files("R", "*.R", full.names = T) %>% sapply(source)
 

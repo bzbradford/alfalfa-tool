@@ -288,7 +288,24 @@ test_loc <- list(lat = 45, lng = -89)
 test_wx <- weather %>% filter(lat == test_loc$lat, lng == test_loc$lng)
 test_cl <- climate$c10 %>% filter(lat == test_loc$lat, lng == test_loc$lng)
 
-buildGrowthPlotData(test_wx, test_cl, as_date("2025-4-15"))
-test_data <- buildGrowthPlotData(test_wx, test_cl, as_date("2024-11-13"))
+buildGrowthPlotData(test_wx, test_cl, as_date("2024-4-15"))
+test_data <- buildGrowthData(test_wx, test_cl, as_date("2025-1-1"))
 
 buildGrowthPlot(test_data, test_loc)
+
+
+
+cut_dates <- c("2025-4-1", "2025-6-1", "2025-8-1") %>% as_date()
+req(identical(cut_dates, sort(unique(cut_dates))))
+cut_days <- yday(cut_dates)
+cut_points <- c(-1, cut_days, 999)
+df <- test_data %>%
+  mutate(cutting = cut(yday, cut_points)) %>%
+  mutate(
+    days_since_cut = row_number() - 1,
+    gdd_since_cut = cumsum(gdd41),
+    .by = c(last_kill, cutting)
+  )
+
+
+buildTimingPlot(test_data, test_loc, 2025, cut_dates)

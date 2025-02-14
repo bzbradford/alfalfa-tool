@@ -116,13 +116,7 @@ plotServer <- function(loc_data) {
             )
           ) %>%
           config(
-            toImageButtonOptions = list(
-              format = "png",
-              filename = opts$title,
-              height = 600,
-              width = 1000,
-              scale = 1.25
-            )
+            toImageButtonOptions = append(OPTS$plot_export_opts, list(filename = opts$title))
           ) %>%
           add_temp_traces(df, "y1")
 

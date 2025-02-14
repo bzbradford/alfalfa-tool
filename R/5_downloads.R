@@ -151,15 +151,6 @@ downloadsServer <- function(grid_data, loc_data) {
       output$loc_c5_csv <- climate_csv_handler(5)
       output$loc_c10_csv <- climate_csv_handler(10)
 
-      # output$loc_c5_csv <- downloadHandler(
-      #   filename = function() paste0("5-year climate for ", loc_str(), ".csv"),
-      #   content = function(file) write_csv(loc_data()$c5, file)
-      # )
-      #
-      # output$loc_c10_csv <- downloadHandler(
-      #   filename = function() paste0("10-year climate for ", loc_str(), ".csv"),
-      #   content = function(file) write_csv(loc_data()$c10, file)
-      # )
     }
   )
 }
