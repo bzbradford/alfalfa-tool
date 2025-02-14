@@ -322,7 +322,7 @@ OPTS <- lst(
   ),
 
   # growth projection
-  growth_min_date = make_date(cur_yr - 1, 6, 1),
+  growth_min_date = start_of_year() - 180,
   growth_max_date = today() + 180,
   growth_default_date = today() - 28,
 

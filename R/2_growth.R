@@ -15,7 +15,7 @@ growthServer <- function(loc_data) {
       ns <- session$ns
 
       rv <- reactiveValues(
-        initial_date = OPTS$growth_default_date,
+        # set_date = OPTS$growth_default_date,
         loc_ready = FALSE
       )
 
@@ -80,28 +80,26 @@ growthServer <- function(loc_data) {
 
       ## date_ui ----
       output$date_ui <- renderUI({
-        min_date <- OPTS$growth_min_date
-        max_date <- OPTS$growth_max_date
-        value <- clamp(rv$initial_date, min_date, max_date)
         dateInput(
           inputId = ns("cut_date"),
           label = NULL,
-          min = min_date,
-          max = max_date,
-          value = value,
-          format = "M d", width = "150px"
+          min = OPTS$growth_min_date,
+          max = OPTS$growth_max_date,
+          value = OPTS$growth_default_date,
+          format = "M d",
+          width = "150px"
         )
       })
 
       ## handle date buttons ----
       observeEvent(input$date_jan1, {
-        rv$initial_date <- start_of_year()
+        updateDateInput(inputId = "cut_date", value = start_of_year())
       })
       observeEvent(input$date_today, {
-        rv$initial_date <- today()
+        updateDateInput(inputId = "cut_date", value = today())
       })
       observeEvent(input$date_reset, {
-        rv$initial_date <- OPTS$growth_default_date
+        updateDateInput(inputId = "cut_date", value = OPTS$growth_default_date)
       })
 
 
