@@ -126,7 +126,6 @@ growthServer <- function(loc_data) {
 
         do.call(buildGrowthPlot, args)
       })
-
     } # end module
   )
 }

@@ -24,7 +24,6 @@
 #- Dependencies ----
 
 suppressPackageStartupMessages({
-  library(styler)
   library(tidyverse) # core
   library(sf) # spatial
   library(fst) # file storage
@@ -182,8 +181,8 @@ OPTS <- lst(
     )
   ),
   map_extent_choices = list(
-    "Wisconsin" = "wi",
-    "Upper Midwest" = "mw"
+    "Upper Midwest" = "mw",
+    "Wisconsin" = "wi"
   ),
   basemaps = list(
     "ESRI Topo" = providers$Esri.WorldTopoMap,

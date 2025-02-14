@@ -150,7 +150,6 @@ downloadsServer <- function(grid_data, loc_data) {
 
       output$loc_c5_csv <- climate_csv_handler(5)
       output$loc_c10_csv <- climate_csv_handler(10)
-
     }
   )
 }
