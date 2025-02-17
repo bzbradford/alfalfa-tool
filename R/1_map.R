@@ -567,11 +567,9 @@ mapServer <- function() {
           df1 %>%
             select(lat, lng, value)
         } else {
-          left_join(
-            df1 %>% select(lat, lng, value1 = value),
-            df2 %>% select(lat, lng, value2 = value),
-            join_by(lat, lng)
-          ) %>%
+          df1 <- df1 %>% select(lat, lng, value1 = value)
+          df2 <- df2 %>% select(lat, lng, value2 = value)
+          left_join(df1, df2, join_by(lat, lng)) %>%
             mutate(value = value2 - value1) %>%
             select(lat, lng, value)
         }

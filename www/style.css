@@ -27,6 +27,10 @@ a, a:hover, a:focus {
 
 /* navbar styles */
 
+.navbar {
+  margin-bottom: 0px;
+}
+
 .navbar-default {
   font-weight: bold;
   background-color: hsl(358, 95%, 30%);

@@ -1,9 +1,26 @@
 #- server.R -#
 
 server <- function(input, output, session) {
+
   OPTS$weather_date_max <- yesterday()
   OPTS$climate_date_min <- start_of_year()
   OPTS$climate_date_max <- end_of_year()
+
+  load_data <- function() {
+    withProgress(
+      message = "Loading datasets...",
+      value = 0,
+      min = 0,
+      max = 3,
+      {
+        load_climate()
+        load_weather()
+        dates <- weather_dates()
+        incProgress(ifelse(length(dates) > 0, 1, 2))
+        update_weather(dates, progress = T)
+      }
+    )
+  }
 
 
   # Reactive values ----

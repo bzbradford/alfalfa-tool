@@ -428,32 +428,10 @@ smooth_cols <- function(.data, width, cols = OPTS$smoothable_cols) {
 
 # Weather handling --------------------------------------------------------
 
-remove_weather_cols <- function(.data) {
-  drop_cols <- c("year", "yday", "mean_temp", "frost", "freeze", "kill", "gdd41cum", "gdd50cum", "inwi")
-  .data %>% select(-any_of(drop_cols))
-}
-
-add_weather_cols <- function(.data) {
-  .data %>%
-    mutate(
-      year = year(date),
-      yday = yday(date),
-      frost = min_temp <= 32,
-      freeze = min_temp <= 28,
-      kill = min_temp <= 24,
-      mean_temp = rowMeans(pick(min_temp, max_temp))
-    ) %>%
-    mutate(
-      gdd41cum = cumsum(gdd41),
-      gdd50cum = cumsum(gdd50),
-      .by = c(lat, lng, year)
-    ) %>%
-    select(
-      lat, lng, date, year, yday,
-      min_temp, max_temp, mean_temp,
-      gdd41, gdd50, gdd41cum, gdd50cum,
-      frost, freeze, kill
-    )
+weather_dates <- function() {
+  dates_need <- sort(seq.Date(OPTS$weather_date_min, yesterday(), 1))
+  dates_have <- if (exists("weather")) sort(unique(weather$date))
+  as.character(dates_need[!(dates_need %in% dates_have)])
 }
 
 # units: temp=F, pressure=kPa, rh=%
@@ -473,7 +451,7 @@ get_weather_grid <- function(d = yesterday()) {
         select(lat, lng, date, min_temp, max_temp) %>%
         inner_join(climate_grids, join_by(lat, lng)) %>%
         mutate(
-          date = as_date(d),
+          datenum = as.integer(as_date(d)),
           gdd86 = gdd_sine(min_temp, max_temp, 86),
           gdd41 = round(gdd_sine(min_temp, max_temp, 41) - gdd86, 8),
           gdd50 = round(gdd_sine(min_temp, max_temp, 50) - gdd86, 8)
@@ -487,10 +465,35 @@ get_weather_grid <- function(d = yesterday()) {
   wx
 }
 
-weather_dates <- function() {
-  dates_need <- sort(seq.Date(OPTS$weather_date_min, yesterday(), 1))
-  dates_have <- if (exists("weather")) sort(unique(weather$date))
-  as.character(dates_need[!(dates_need %in% dates_have)])
+validate_weather <- function() {
+  if (!exists("weather")) stop("Undefined")
+  weather <<- weather %>%
+    arrange(lat, lng, date) %>%
+    distinct(lat, lng, date, .keep_all = TRUE)
+}
+
+# remove any cols not directly from agweather for smaller file size
+minimize_weather <- function(.data) {
+  keep_cols <- c("lat", "lng", "date", "min_temp", "max_temp", "gdd41", "gdd50")
+  select(.data, any_of(keep_cols))
+}
+
+finalize_weather <- function(.data) {
+  .data %>%
+    arrange(lat, lng, date) %>%
+    mutate(
+      year = year(date),
+      yday = yday(date),
+      mean_temp = rowMeans(pick(min_temp, max_temp)),
+      frost = min_temp <= 32,
+      freeze = min_temp <= 28,
+      kill = min_temp <= 24
+    ) %>%
+    mutate(
+      gdd41cum = cumsum(gdd41),
+      gdd50cum = cumsum(gdd50),
+      .by = c(lat, lng, year)
+    )
 }
 
 
@@ -512,7 +515,7 @@ load_climate <- function() {
 }
 
 load_weather <- function() {
-  wx_files <- list.files(path = "./data", pattern = "^weather_.*\\.fst$", full.names = T)
+  wx_files <- list.files(path = "./data", pattern = "^weather_\\d{4}\\.fst$", full.names = T)
   if (length(wx_files) > 0) {
     if (!exists("weather") || max(weather$date) != yesterday()) {
       weather <<- wx_files %>%
@@ -536,32 +539,19 @@ update_weather <- function(dates = weather_dates(), progress = FALSE) {
   }
 
   if (progress) incProgress(1, message = "Finalizing datasets...", detail = "")
-  weather <<- weather %>% add_weather_cols()
-
-  # save weather file(s) if updated
-  lapply(unique(year(as_date(dates))), function(yr) {
-    weather %>%
-      filter(year == yr) %>%
-      remove_weather_cols() %>%
-      arrange(lat, lng, date) %>%
-      write_fst(str_glue("data/weather_{yr}.fst"), compress = 99)
-  })
+  weather <<- finalize_weather(weather)
+  write_weather(weather, yrs = unique(year(dates)))
 }
 
-load_data <- function() {
-  withProgress(
-    message = "Loading datasets...",
-    value = 0,
-    min = 0,
-    max = 3,
-    {
-      load_climate()
-      load_weather()
-      dates <- weather_dates()
-      incProgress(ifelse(length(dates) > 0, 1, 2))
-      update_weather(dates, progress = T)
-    }
-  )
+# save weather file(s) if updated
+write_weather <- function(wx, yrs = unique(wx$year)) {
+  lapply(yrs, function(yr) {
+    wx %>%
+      filter(year == yr) %>%
+      minimize_weather() %>%
+      write_fst(str_glue("data/weather_{yr}.fst"), compress = 99)
+  })
+  yrs
 }
 
 
