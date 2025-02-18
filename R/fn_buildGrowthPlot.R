@@ -25,7 +25,7 @@ buildGrowthPlot <- function(df, loc) {
   }
 
   # set gdd axis y range
-  opts$yrange <- c(0, max(df$gdd_since_kill) * 1.05)
+  opts$yrange <- c(0, max(df$gdd_since_kill) * 1.1)
 
   # label any growth thresholds
   growth_annot <- df %>%

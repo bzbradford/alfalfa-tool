@@ -18,7 +18,7 @@ buildTimingPlot <- function(df, loc, weather_year, cut_dates) {
     )
 
   # set gdd axis y range
-  opts$yrange <- c(0, max(df$gdd41cum) * 1.05)
+  opts$yrange <- c(0, max(df$gdd41cum) * 1.1)
 
   # cutting date annotations
   cut_annot <- df %>%
