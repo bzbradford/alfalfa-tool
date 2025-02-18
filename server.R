@@ -88,7 +88,8 @@ server <- function(input, output, session) {
   # Main UI ----
 
   output$main_ui <- renderUI({
-    if (!rv$weather_ready) {
+    # if the weather isn't updated on boot, load it
+    if (isolate(!rv$weather_ready)) {
       load_data()
       rv$weather_ready <- TRUE
     }

@@ -18,8 +18,6 @@
 # shiny::devmode(TRUE)
 # shiny::devmode(FALSE)
 
-# styler::style_dir()
-
 
 #- Dependencies ----
 
@@ -166,8 +164,8 @@ OPTS <- lst(
   climate_date_max = NULL, # set in server
 
   # growth projection
-  growth_min_date = start_of_year() - 180,
-  growth_max_date = today() + 180,
+  growth_min_date = start_of_year(today() - 180),
+  growth_max_date = end_of_year(today() + 180),
   growth_default_date = today() - 28,
   growth_thresholds = c(360, seq(800, 1200, by = 100)),
 
@@ -511,7 +509,9 @@ load_climate <- function() {
 }
 
 load_weather <- function() {
-  wx_files <- list.files(path = "./data", pattern = "^weather_\\d{4}\\.fst$", full.names = T)
+  files_need <- paste0("data/weather_", min_yr:cur_yr, ".fst")
+  files_have <- list.files(path = "data", pattern = "^weather_\\d{4}\\.fst$", full.names = T)
+  wx_files <- intersect(files_need, files_have)
   if (length(wx_files) > 0) {
     if (!exists("weather") || max(weather$date) != yesterday()) {
       weather <<- wx_files %>%
