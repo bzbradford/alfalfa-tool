@@ -2,27 +2,33 @@
 #' @param loc list with lat, lng
 #'
 buildGrowthPlot <- function(df, loc) {
+  # maximum of 180 days
+  df <- head(df, 180)
+
   opts <- list()
   opts$cut_date <- min(df$date)
   opts$end_date <- max(df$date)
   opts$title <- sprintf(
-    "Alfalfa growth projection since %s for %.1f°N, %.1f°W",
+    "Alfalfa growth projection from %s for %.1f°N, %.1f°W",
     format(opts$cut_date, "%b %d, %Y"), loc$lat, loc$lng
   )
 
   # cutting thresholds
-  thresholds <- seq(800, 1200, by = 100)
-  thresholds <- thresholds[thresholds < last(df$gdd_since_kill)]
-  threshold_dates <- sapply(thresholds, function(gdd) {
-    df[which.min(abs(gdd - df$gdd_since_kill)), ]$date
-  })
-  if (length(threshold_dates) > 0) {
-    threshold_dates <- as_date(threshold_dates)
+  threshold_dates <- df %>%
+    drop_na(growth_threshold) %>%
+    distinct(growth_threshold, .keep_all = TRUE) %>%
+    pull(date)
+
+  # project at most 30 days beyond the last threshold
+  if (length(threshold_dates) > 0 & max(df$gdd_since_kill) > max(OPTS$growth_thresholds)) {
     df <- df %>% filter(date <= max(threshold_dates) + 30)
   }
-  opts$yrange <- c(0, max(df$gdd_since_kill) * 1.1)
 
-  cut_annot <- df %>%
+  # set gdd axis y range
+  opts$yrange <- c(0, max(df$gdd_since_kill) * 1.05)
+
+  # label any growth thresholds
+  growth_annot <- df %>%
     filter(date %in% threshold_dates) %>%
     mutate(label = paste0(
       "<b>", format(date, "%b %d"), "</b><br>",
@@ -30,19 +36,12 @@ buildGrowthPlot <- function(df, loc) {
       days_since_kill, " days"
     ))
 
-  # identify fall kill probability to annotate the 50% date
-  kill_date <- df %>%
-    filter((lag(kill_by) < .5 & kill_by >= .5) | (kill_by <= .5 & lead(kill_by) > .5)) %>%
-    slice_min(abs(kill_by - .5)) %>%
-    pull(date)
-
-  # annotate fall kill probability
+  # label any killing freeze risks
   kill_annot <- df %>%
-    filter(date %in% kill_date) %>%
-    filter(yday > 200) %>%
+    filter(!is.na(kill_annot)) %>%
     mutate(label = paste0(
       "<b>", format(date, "%b %d"), "</b><br>",
-      "50% kill<br>probability<br>",
+      kill_annot, "<br>",
       days_since_kill, " days<br>",
       round(gdd_since_kill), " GDD"
     ))
@@ -69,16 +68,28 @@ buildGrowthPlot <- function(df, loc) {
     )
   }
 
+  # add projected hard freezes if any
+  freezes <- df %>% filter(kill, source == "climate")
+  if (nrow(freezes) > 0) {
+    plt <- plt %>% add_trace(
+      name = "Possible freeze (<24°F)",
+      x = freezes$date, y = .025, yaxis = "y2",
+      type = "bar", hovertemplate = "Yes",
+      marker = list(color = "lightblue", line = list(opacity = 0)),
+      width = 1000 * 60 * 60 * 24 # 1 day in ms
+    )
+  }
+
   # add gdd traces
   plt <- plt %>%
     add_trace(
-      name = "GDD41",
+      name = "Daily GDD<sub>41</sub>",
       x = ~date, y = ~gdd41, yaxis = "y1",
       type = "bar", hovertemplate = "%{y:.1f}",
       marker = list(color = "#00a038")
     ) %>%
     add_trace(
-      name = "GDD41 since last kill/cut",
+      name = "GDD<sub>41</sub> since last kill/cut",
       x = ~date, y = ~gdd_since_kill, yaxis = "y1",
       type = "scatter", mode = "lines", hovertemplate = "%{y:.1f}",
       line = list(color = "#00a038")
@@ -101,15 +112,15 @@ buildGrowthPlot <- function(df, loc) {
       showgrid = F,
       fixedrange = T,
       tickformat = ".0%",
-      range = c(0, 1)
+      range = c(0, 1.05)
     )
   }
 
-  # add cut annotation if any
-  if (nrow(cut_annot) > 0) {
+  # add growth threshold annotations if any
+  if (nrow(growth_annot) > 0) {
     plt <- plt %>%
       add_annotations(
-        data = cut_annot,
+        data = growth_annot,
         x = ~date, y = ~gdd_since_kill,
         text = ~label,
         ax = -25, ay = -35,
@@ -118,19 +129,21 @@ buildGrowthPlot <- function(df, loc) {
       )
   }
 
-  # add kill annotation if any
+  # add killing freeze annotations if any
   if (nrow(kill_annot) > 0) {
     plt <- plt %>%
       add_annotations(
         data = kill_annot,
-        x = ~date, y = ~ kill_by * 100, yref = "y2",
+        x = ~date, y = ~ kill_by, yref = "y2",
         text = ~label,
-        ax = 40, ay = 30,
+        ax = 40,
+        ay = 0,
         arrowsize = .5,
         font = list(size = 10)
       )
   }
 
+  # update plot layout
   plt <- plt %>%
     layout(
       legend = OPTS$plot_legend,
@@ -163,15 +176,23 @@ buildGrowthPlot <- function(df, loc) {
       toImageButtonOptions = append(OPTS$plot_export_opts, list(filename = opts$title))
     )
 
+  # add cut zone annotations
   cut_zones <- list(
     rect(800, 1200, color = "green"),
     rect(900, 1100, color = "green"),
     rect(0, 360, color = "blue")
   )
 
-  if (today() %in% df$date) {
+  # add line showing today if in range
+  plt <- if (today() %in% df$date) {
     plt %>% add_today(other_shapes = cut_zones)
   } else {
     plt %>% layout(shapes = cut_zones)
   }
+
+  # return the plot and the filtered data
+  return(list(
+    plt = plt,
+    df = df
+  ))
 }

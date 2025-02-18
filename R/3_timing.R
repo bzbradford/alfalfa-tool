@@ -43,7 +43,7 @@ timingServer <- function(loc_data) {
 
       # determine initial cut timing based on gdd accumulation
       schedule_cut_dates <- function() {
-        df <- weather_data()
+        df <- plot_data()
         freq <- as.numeric(req(input$cut_freq))
         cuts <- seq(freq, max(df$gdd_since_kill), by = freq)
         days <- sapply(cuts, function(gdd) {
@@ -240,96 +240,30 @@ timingServer <- function(loc_data) {
 
 
       # Plot data ----
-
-      # weather_data <- reactive({
-      #   opts <- list(
-      #     year = req(input$year),
-      #     period = req(input$period)
-      #   )
-      #   wx <- req(rv$weather) %>%
-      #     filter(year == opts$year) %>%
-      #     select(date, yday, gdd41, kill) %>%
-      #     mutate(last_kill = if_else(kill, yday, NA)) %>%
-      #     fill(last_kill)
-      #   cl <- req(rv[[opts$period]])
-      #   cl_gdd <- cl %>%
-      #     filter(yday > max(wx$yday)) %>%
-      #     select(yday, gdd41) %>%
-      #     mutate(date = start_of_year(opts$year) + yday - 1)
-      #   cl_risk <- cl %>% select(yday, kill_by)
-      #   bind_rows(wx, cl_gdd) %>%
-      #     left_join(cl_risk, join_by(yday)) %>%
-      #     fill(last_kill) %>%
-      #     mutate(gdd41cum = cumsum(gdd41)) %>%
-      #     mutate(gdd_since_kill = cumsum(gdd41), .by = last_kill)
-      # })
-
-      weather_data <- reactive({
-        climate_period <- req(input$period)
-
-        args <- list(
+      plot_data <- reactive({
+        buildGrowthData(
           weather_data = req(rv$weather),
-          climate_data = req(rv[[climate_period]]),
+          climate_data = req(rv[[req(input$period)]]),
           start_date = start_of_year(req(input$year))
         )
-
-        do.call(buildGrowthData, args)
       })
-
-      # observe({
-      #   weather_year
-      # })
-      #
-      # buildTimingData <- function(weather_data, climate_data, weather_year, climate_period) {
-      #   opts <- list(
-      #     year = req(input$year),
-      #     period = req(input$period)
-      #   )
-      #   wx <- req(rv$weather) %>%
-      #     filter(year == opts$year) %>%
-      #     select(date, yday, gdd41, kill) %>%
-      #     mutate(last_kill = if_else(kill, yday, NA)) %>%
-      #     fill(last_kill)
-      #   cl <- req(rv[[opts$period]])
-      #   cl_gdd <- cl %>%
-      #     filter(yday > max(wx$yday)) %>%
-      #     select(yday, gdd41) %>%
-      #     mutate(date = start_of_year(opts$year) + yday - 1)
-      #   cl_risk <- cl %>% select(yday, kill_by)
-      #   bind_rows(wx, cl_gdd) %>%
-      #     left_join(cl_risk, join_by(yday)) %>%
-      #     fill(last_kill) %>%
-      #     mutate(gdd41cum = cumsum(gdd41)) %>%
-      #     mutate(gdd_since_kill = cumsum(gdd41), .by = last_kill)
-      # })
-
-      # observe({
-      #   cut_dates <- req(rv$set_cut_dates)
-      #   req(identical(cut_dates, sort(unique(cut_dates))))
-      #   cut_days <- yday(cut_dates)
-      #   cut_points <- c(-1, cut_days, 999)
-      #   df <- weather_data() %>%
-      #     mutate(cutting = cut(yday, cut_points)) %>%
-      #     mutate(
-      #       days_since_cut = row_number() - 1,
-      #       gdd_since_cut = cumsum(gdd41),
-      #       .by = c(last_kill, cutting)
-      #     )
-      #   rv$plot_data <- df
-      # })
 
 
       # Plot ----
 
       output$plot <- renderPlotly({
-        args <- list(
-          df = weather_data(),
+        # make sure dates are in the right order
+        cut_dates <- req(rv$set_cut_dates)
+        req(identical(cut_dates, sort(unique(cut_dates))))
+
+        buildTimingPlot(
+          df = plot_data(),
           loc = req(rv$loc),
           weather_year = req(input$year),
-          cut_dates = req(rv$set_cut_dates)
+          cut_dates = cut_dates
         )
-        do.call(buildTimingPlot, args)
       })
+
     } # end module
   )
 }

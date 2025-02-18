@@ -14,8 +14,9 @@ growthServer <- function(loc_data) {
     function(input, output, session) {
       ns <- session$ns
 
+      # Reactive Values ----
+
       rv <- reactiveValues(
-        # set_date = OPTS$growth_default_date,
         loc_ready = FALSE
       )
 
@@ -42,7 +43,8 @@ growthServer <- function(loc_data) {
         tagList(
           uiOutput(ns("options_ui")),
           plotlyOutput(ns("plot"), height = "500px"),
-          div(class = "plot-caption", OPTS$growth_plot_caption)
+          div(class = "plot-caption", OPTS$growth_plot_caption),
+          uiOutput(ns("info_ui")),
         )
       })
 
@@ -78,15 +80,15 @@ growthServer <- function(loc_data) {
         )
       })
 
-      ## date_ui ----
+      ### date_ui ----
       output$date_ui <- renderUI({
         dateInput(
           inputId = ns("cut_date"),
           label = NULL,
           min = OPTS$growth_min_date,
           max = OPTS$growth_max_date,
-          value = OPTS$growth_default_date,
-          format = "M d",
+          value = first_truthy(input$cut_date, OPTS$growth_default_date),
+          format = "M d, yyyy",
           width = "150px"
         )
       })
@@ -103,29 +105,38 @@ growthServer <- function(loc_data) {
       })
 
 
-      # Generate plot data ----
-      plot_data <- reactive({
-        climate_period <- req(input$climate)
-
-        args <- list(
-          weather_data <- req(rv$weather),
-          climate_data <- req(rv[[climate_period]]),
-          start_date <- req(input$cut_date)
+      ## plot_data ----
+      growth_data <- reactive({
+        df <- buildGrowthData(
+          weather_data = req(rv$weather),
+          climate_data = req(rv[[req(input$climate)]]),
+          start_date = req(input$cut_date)
         )
-
-        do.call(buildGrowthData, args)
       })
 
-
-      # Render plot ----
-      output$plot <- renderPlotly({
-        args <- list(
-          df = plot_data(),
+      plot_data <- reactive({
+        buildGrowthPlot(
+          df = growth_data(),
           loc = req(rv$loc)
         )
-
-        do.call(buildGrowthPlot, args)
       })
+
+      ## Plot ----
+      output$plot <- renderPlotly({
+        plot_data()$plt
+      })
+
+      ## Info UI ----
+      output$info_ui <- renderUI({
+        # filter to match plot data
+        df <- plot_data()$df
+        div(
+          class = "well",
+          buildGrowthInfo(df)
+        )
+      })
+
+
     } # end module
   )
 }
