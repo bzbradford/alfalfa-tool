@@ -58,13 +58,14 @@ mapServer <- function() {
       ## Clear map grid on type change ----
       observeEvent(input$data_type, {
         req(input$data_type)
+
         leafletProxy("map") %>% clearGroup(layers$grid)
       })
 
       ## Map extent UI ----
       output$map_extent_ui <- renderUI({
         choices <- OPTS$map_extent_choices
-        # selected <- first_truthy(isolate(input$map_extent), first(choices))
+
         radioGroupButtons(
           ns("map_extent"), "Map extent",
           choices = choices,
@@ -77,7 +78,7 @@ mapServer <- function() {
       ## Data type UI ----
       output$type_ui <- renderUI({
         choices <- OPTS$map_type_choices
-        # selected <- first_truthy(isolate(input$data_type), first(choices))
+
         radioGroupButtons(
           ns("data_type"), "Choose data layer",
           choices = choices,

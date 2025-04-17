@@ -25,6 +25,7 @@ suppressPackageStartupMessages({
   library(tidyverse) # core
   library(sf) # spatial
   library(fst) # file storage
+  library(httr2) # requests
   library(shiny)
   library(shinyBS) # bscollapse
   library(shinyjs) # javascript
@@ -433,31 +434,33 @@ get_weather_grid <- function(d = yesterday()) {
   url <- paste0("https://agweather.cals.wisc.edu/api/weather/grid?date=", d)
   message(d, " ==> GET ", url)
   wx <- tibble()
-  tryCatch(
-    {
-      resp <- httr::GET(url) %>% httr::content()
-      data <- resp$data %>%
-        enframe() %>%
-        unnest_wider("value")
-      if (nrow(data) == 0) stop()
-      wx <- data %>%
-        fix_coords() %>%
-        select(lat, lng, date, min_temp, max_temp) %>%
-        inner_join(climate_grids, join_by(lat, lng)) %>%
-        mutate(
-          date = as_date(d),
-          gdd86 = gdd_sine(min_temp, max_temp, 86),
-          gdd41 = round(gdd_sine(min_temp, max_temp, 41) - gdd86, 8),
-          gdd50 = round(gdd_sine(min_temp, max_temp, 50) - gdd86, 8)
-        ) %>%
-        select(-gdd86)
-    },
-    error = function(e) {
-      message(str_glue("Failed to retrieve weather data for {d}: {e}"))
-    }
-  )
+  tryCatch({
+    resp <- request(url) %>%
+      req_perform() %>%
+      resp_body_json()
+    data <- resp$data %>%
+      enframe() %>%
+      unnest_wider("value")
+    if (nrow(data) == 0) stop()
+    wx <- data %>%
+      fix_coords() %>%
+      select(lat, lng, date, min_temp, max_temp) %>%
+      inner_join(climate_grids, join_by(lat, lng)) %>%
+      mutate(
+        date = as_date(d),
+        gdd86 = gdd_sine(min_temp, max_temp, 86),
+        gdd41 = round(gdd_sine(min_temp, max_temp, 41) - gdd86, 8),
+        gdd50 = round(gdd_sine(min_temp, max_temp, 50) - gdd86, 8)
+      ) %>%
+      select(-gdd86)
+  }, error = function(e) {
+    message(str_glue("Failed to retrieve weather data for {d}: {e}"))
+  })
   wx
 }
+
+# get_weather_grid()
+
 
 validate_weather <- function() {
   if (!exists("weather")) stop("Undefined")
