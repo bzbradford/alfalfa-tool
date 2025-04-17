@@ -2,7 +2,8 @@
 
 growthUI <- function() {
   ns <- NS("growth")
-  tagList(
+
+  div(
     p(OPTS$growth_info),
     uiOutput(ns("main_ui"))
   )

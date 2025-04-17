@@ -1,5 +1,6 @@
 #- map.R -#
 
+# Primary map, displayed on left side of app
 mapUI <- function() {
   ns <- NS("map")
 
@@ -16,8 +17,10 @@ mapUI <- function() {
   )
 }
 
+# Map options, displayed in sidebar when map tab selected
 mapSidebarUI <- function() {
   ns <- NS("map")
+
   div(
     class = "well",
     useBusyIndicators(spinners = F, pulse = F, fade = F),
@@ -61,10 +64,11 @@ mapServer <- function() {
       ## Map extent UI ----
       output$map_extent_ui <- renderUI({
         choices <- OPTS$map_extent_choices
+        # selected <- first_truthy(isolate(input$map_extent), first(choices))
         radioGroupButtons(
           ns("map_extent"), "Map extent",
           choices = choices,
-          selected = first_truthy(isolate(input$map_extent), first(choices)),
+          selected = first(choices),
           size = "sm"
         )
       })
@@ -73,10 +77,11 @@ mapServer <- function() {
       ## Data type UI ----
       output$type_ui <- renderUI({
         choices <- OPTS$map_type_choices
+        # selected <- first_truthy(isolate(input$data_type), first(choices))
         radioGroupButtons(
           ns("data_type"), "Choose data layer",
           choices = choices,
-          selected = first_truthy(isolate(input$data_type), first(choices)),
+          selected = first(choices),
           size = "sm"
         )
       })
@@ -145,7 +150,6 @@ mapServer <- function() {
           elem,
           uiOutput(ns("smoothing_ui")),
           uiOutput(ns("date_slider_ui")),
-          uiOutput(ns("date_btns_ui")),
           uiOutput(ns("display_opts_ui"))
         )
       })
@@ -169,12 +173,16 @@ mapServer <- function() {
       ## Date selector UI ----
       output$date_slider_ui <- renderUI({
         type <- req(input$data_type)
+        id <- ifelse(
+          type %in% c("weather", "comparison"),
+          "weather_date_ui",
+          "climate_date_ui"
+        )
 
-        if (type %in% c("weather", "comparison")) {
-          uiOutput(ns("weather_date_ui"))
-        } else {
-          uiOutput(ns("climate_date_ui"))
-        }
+        tagList(
+          uiOutput(ns(id)),
+          uiOutput(ns("date_btns_ui"))
+        )
       })
 
       ### Weather date slider ----
@@ -613,7 +621,7 @@ mapServer <- function() {
         opts$extent <- req(input$map_extent)
         opts$type <- req(input$data_type)
         opts$col <- req(input[[paste0(opts$type, "_value")]])
-        opts$smoothing <- req(input$smoothing) %>% as.numeric()
+        opts$smoothing <- ifelse(opts$col %in% OPTS$smoothable_cols, as.numeric(req(input$smoothing)), 1)
         opts$date <- req(grid_date())
         date_len <- ifelse(opts$col %in% OPTS$cumulative_cols, 2, 1)
         req(length(opts$date) == date_len)

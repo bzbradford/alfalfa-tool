@@ -2,7 +2,8 @@
 
 timingUI <- function() {
   ns <- NS("timing")
-  tagList(
+
+  div(
     p(OPTS$timing_info),
     uiOutput(ns("main_ui"))
   )

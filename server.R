@@ -111,41 +111,56 @@ server <- function(input, output, session) {
 
   # Sidebar selector ----
 
-  sidebar_pages <- list(
-    map = list(
-      h3("Map display options"),
-      mapSidebarUI()
-    ),
-    growth = list(
-      h3("Alfalfa growth projection"),
-      growthUI()
-    ),
-    timing = list(
-      h3("Alfalfa cut planning tool"),
-      timingUI()
-    ),
-    charts = list(
-      h3("Weather and climate charts"),
-      plotUI()
-    ),
-    downloads = list(
-      h3("Data downloads"),
-      downloadsUI()
-    ),
-    about = list(
-      h3("About this app"),
-      includeMarkdown("about.md")
-    )
-  )
-
   output$sidebar_ui <- renderUI({
-    if (!rv$map_ready) {
-      sidebar_pages[["map"]]
-    } else {
-      page <- req(input$navbar)
-      # scroll to sidebar element on mobile view
-      runjs("if (window.innerWidth < 768) document.getElementById('sidebar_ui').scrollIntoView();")
-      sidebar_pages[[page]]
-    }
+    tagList(
+      div(
+        id = "map",
+        h3("Map display options"),
+        mapSidebarUI()
+      ),
+      div(
+        id = "growth",
+        style = "display: none;",
+        h3("Alfalfa growth projection"),
+        growthUI()
+      ),
+      div(
+        id = "timing",
+        style = "display: none;",
+        h3("Alfalfa cut planning tool"),
+        timingUI()
+      ),
+      div(
+        id = "charts",
+        style = "display: none;",
+        h3("Weather and climate charts"),
+        plotUI()
+      ),
+      div(
+        id = "downloads",
+        style = "display: none;",
+        h3("Data downloads"),
+        downloadsUI()
+      ),
+      div(
+        id = "about",
+        style = "display: none;",
+        h3("About this app"),
+        includeMarkdown("about.md")
+      )
+    )
   })
+
+  # hide and show the appropriate content when switching tabs
+  observe({
+    req(rv$map_ready)
+    id <- req(input$navbar)
+    tabs <- c("map", "growth", "timing", "charts", "downloads", "about")
+    lapply(tabs, function(tab) {
+      if (tab != id) hide(tab) else show(tab)
+    })
+    #   # scroll to sidebar element on mobile view
+    runjs("if (window.innerWidth < 768) document.getElementById('sidebar_ui').scrollIntoView();")
+  })
+
 }
