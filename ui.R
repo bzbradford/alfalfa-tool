@@ -46,7 +46,7 @@ ui <- navbarPage(
         ),
         p(
           "Feedback welcome!",
-          a("Click here to take our survey.", href = "https://uwmadison.co1.qualtrics.com/jfe/form/SV_81RoNUXYxlicCa2", target = "_blank")
+          a("Click here to take our survey.", href = "https://forms.gle/m4eh4kMkhLjENiEPA", target = "_blank")
         )
       ),
       div(
