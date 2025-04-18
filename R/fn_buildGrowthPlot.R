@@ -196,3 +196,16 @@ buildGrowthPlot <- function(df, loc) {
     df = df
   ))
 }
+
+
+# Test ----
+
+# test_loc <- list(lat = 44.3, lng = -90.2)
+# test_loc <- list(lat = 45, lng = -89)
+# test_wx <- weather %>% filter(lat == test_loc$lat, lng == test_loc$lng)
+# test_cl <- climate$c10 %>% filter(lat == test_loc$lat, lng == test_loc$lng)
+# test_data <- buildGrowthData(test_wx, test_cl, as_date("2025-1-1"))
+#
+# buildGrowthPlot(test_data, test_loc)
+#
+# buildGrowthInfo(test_data)

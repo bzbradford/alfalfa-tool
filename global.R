@@ -342,18 +342,23 @@ in_extent <- function(lat, lng, extent) {
 }
 
 # potentially supports multiple extents, but for now just 'wi' or everything
-filter_by_extent <- function(.data, extent) {
-  if (extent == "wi") {
-    .data %>% filter(in_extent(lat, lng, extent = "wi"))
-  } else {
-    .data
-  }
+filter_by_extent <- function(.data, extent = c("mw", "wi")) {
+  extent <- match.arg(extent)
+  switch(extent,
+    "mw" = .data,
+    "wi" = filter(.data, in_extent(lat, lng, extent = "wi"))
+  )
 }
 
+# convert coordinate string to named list
 parse_coords <- function(str) {
-  str <- gsub("[ °NW]", "", str)
+  str <- str %>%
+    str_replace_all("[°NW]", "") %>%
+    str_squish() %>%
+    str_replace_all("[ ]+", ",") %>%
+    str_replace_all("[,]+", ",")
   parts <- str_split_1(str, ",")
-  if (length(parts) != 2) stop("Invalid coordinate format.")
+  if (length(parts) < 2) stop("Invalid coordinate format.")
   coords <- suppressWarnings(list(
     lat = as.numeric(parts[1]),
     lng = as.numeric(parts[2])
@@ -362,6 +367,12 @@ parse_coords <- function(str) {
   coords
 }
 
+# parse_coords("45 -89")
+# parse_coords("45.12 -89.34")
+# parse_coords("foo bar")
+
+
+# generate derived climate data columns
 add_climate_cols <- function(.data) {
   .data %>%
     mutate(
@@ -376,11 +387,10 @@ add_climate_cols <- function(.data) {
     )
 }
 
+# apply rolling mean to appropriate columns
 smooth_cols <- function(.data, width, cols = OPTS$smoothable_cols) {
   width <- as.numeric(width)
-  if (width == 1) {
-    return(.data)
-  }
+  if (width == 1) return(.data)
   mutate(.data, across(
     any_of(cols),
     ~ zoo::rollapply(.x, width = width, FUN = mean, na.rm = T, partial = T)
@@ -461,7 +471,7 @@ get_weather_grid <- function(d = yesterday()) {
 
 # get_weather_grid()
 
-
+# remove duplicates if any
 validate_weather <- function() {
   if (!exists("weather")) stop("Undefined")
   weather <<- weather %>%
@@ -475,6 +485,7 @@ minimize_weather <- function(.data) {
   select(.data, any_of(keep_cols))
 }
 
+# build additional derived data columns
 finalize_weather <- function(.data) {
   .data %>%
     arrange(lat, lng, date) %>%
@@ -497,6 +508,7 @@ finalize_weather <- function(.data) {
 
 # Data loaders ------------------------------------------------------------
 
+# load climate data into memory
 load_climate <- function() {
   if (!exists("climate")) {
     climate <<- list(
@@ -511,6 +523,7 @@ load_climate <- function() {
   }
 }
 
+# load weather data into memory
 load_weather <- function() {
   files_need <- paste0("data/weather_", min_yr:cur_yr, ".fst")
   files_have <- list.files(path = "data", pattern = "^weather_\\d{4}\\.fst$", full.names = T)
@@ -525,6 +538,7 @@ load_weather <- function() {
   }
 }
 
+# get any missing weather data
 update_weather <- function(dates = weather_dates(), progress = FALSE) {
   if (!exists("weather")) weather <<- tibble()
 
@@ -561,7 +575,7 @@ write_weather <- function(wx, yrs = unique(wx$year)) {
 #' @param weather_data weather data for a single location
 #' @param climate_data climate data for a single location
 #' @param start_date start of growth projection
-#'
+#' @returns tibble
 buildGrowthData <- function(weather_data, climate_data, start_date) {
   wx <- weather_data %>%
     filter(date >= start_date) %>%
@@ -609,6 +623,15 @@ buildGrowthData <- function(weather_data, climate_data, start_date) {
     )
 }
 
+# test_loc <- list(lat = 44.3, lng = -90.2)
+# test_wx <- weather %>% filter(lat == test_loc$lat, lng == test_loc$lng)
+# test_cl <- climate$c10 %>% filter(lat == test_loc$lat, lng == test_loc$lng)
+# test_growth_data <- buildGrowthData(test_wx, test_cl, as_date("2025-1-1"))
+
+
+#' Summarize growth data as text
+#' @param df data from `buildGrowthData` function
+#' @returns string
 buildGrowthInfo <- function(df) {
   date_fmt <- ifelse(
     length(unique(year(df$date))) == 1,
@@ -645,6 +668,8 @@ buildGrowthInfo <- function(df) {
   shiny::HTML(str)
 }
 
+# buildGrowthInfo(test_growth_data)
+
 
 
 # Initialize data ---------------------------------------------------------
@@ -667,14 +692,6 @@ if (!exists("counties_mw")) {
     )
 }
 
-
-
-# App cleanup ----
-
-# removes all objects from the environment on app shutdown
-# onStop(
-#   function() { rm(list = ls(all.names = TRUE)) }
-# )
 
 
 # Testing ----
