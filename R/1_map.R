@@ -106,7 +106,7 @@ mapServer <- function() {
           radioGroupButtons(
             ns("climate_period"), "Climate period",
             choices = choices,
-            selected = first_truthy(isolate(input$climate_period), first(choices)),
+            selected = first_truthy(isolate(input$climate_period), first(OPTS$climate_period_choices)),
             size = "sm"
           )
         }
@@ -194,7 +194,7 @@ mapServer <- function() {
         opts$value <- req(input[[paste0(opts$type, "_value")]])
         opts$min <- start_of_year(opts$year)
         opts$max <- min(yesterday(), end_of_year(opts$year))
-        opts$prev_dates <- rv$date_set
+        opts$prev_dates <- rv$date_vals
         opts$prev_weather_date <- isolate(input$weather_date)
         opts$end_date <-
           coalesce(
@@ -223,32 +223,39 @@ mapServer <- function() {
 
       ### Climate date slider ----
       output$climate_date_ui <- renderUI({
-        opts <- list()
-        opts$type <- req(input$data_type)
-        opts$period <- req(input$climate_period)
-        opts$value <- req(input[[paste0(opts$type, "_value")]])
-        opts$min <- start_of_year()
-        opts$max <- end_of_year()
-        opts$prev_dates <- rv$date_set
-        opts$prev_weather_date <- isolate(rv$weather_date)
-        opts$prev_climate_date <- isolate(rv$climate_date)
-        opts$end_date <- coalesce(
-          opts$prev_dates$end,
-          rev(opts$prev_climate_date)[1],
-          rev(opts$prev_weather_date)[1],
-          yesterday()
-        ) %>%
-          align_dates(opts$min) %>%
-          clamp(opts$min, opts$max)
-        if (opts$value %in% OPTS$cumulative_cols) {
-          opts$start_date <- coalesce(
-            opts$prev_dates$start,
-            rev(opts$prev_climate_date)[2],
-            rev(opts$prev_weather_date)[2],
-            opts$min
+        # reactive links
+        opts <- lst(
+          type = req(input$data_type),
+          period = req(input$climate_period),
+          value = req(input[[paste0(type, "_value")]]),
+          prev_dates = first_truthy(rv$date_set, isolate(rv$date_vals))
+        )
+
+        # non-reactive, read on initial render
+        isolate({
+          opts$min <- start_of_year()
+          opts$max <- end_of_year()
+          opts$prev_weather_date <- rv$weather_date
+          opts$prev_climate_date <- rv$climate_date
+          opts$end_date <- coalesce(
+            opts$prev_dates$end,
+            rev(opts$prev_climate_date)[1],
+            rev(opts$prev_weather_date)[1],
+            yesterday()
           ) %>%
-            align_dates(opts$min)
-        }
+            align_dates(opts$min) %>%
+            clamp(opts$min, opts$max)
+          if (opts$value %in% OPTS$cumulative_cols) {
+            opts$start_date <- coalesce(
+              opts$prev_dates$start,
+              rev(opts$prev_climate_date)[2],
+              rev(opts$prev_weather_date)[2],
+              opts$min
+            ) %>%
+              align_dates(opts$min)
+          }
+        })
+
         sliderInput(
           ns("climate_date"), "Date",
           min = opts$min, max = opts$max,
@@ -402,8 +409,13 @@ mapServer <- function() {
       output$map_title <- renderUI({
         opts <- req(rv$grid_data$opts)
         title <- get_col_label(opts$type, opts$col)
-        date_fmt <- ifelse(opts$type == "climate", "%b %d", "%b %d, %Y")
-        date_str <- paste(format(opts$date, date_fmt), collapse = "-")
+        date_str <- if (opts$type == "climate") {
+          dt <- paste(format(opts$date, "%b %d"), collapse = "-")
+          cl <- OPTS$climate_period_ranges[[opts$period]]
+          sprintf("%s (%s)", dt, cl)
+        } else {
+          paste(format(opts$date, "%b %d, %Y"), collapse = "-")
+        }
         title <- paste0(title, " - ", date_str)
         if (opts$smoothing != 1) {
           title <- paste0(title, " - ", opts$smoothing, "-day average")

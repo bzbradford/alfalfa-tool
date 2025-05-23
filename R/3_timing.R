@@ -18,11 +18,7 @@ timingServer <- function(loc_data) {
       # Reactives ----
 
       rv <- reactiveValues(
-        loc = NULL,
-        loc_ready = FALSE,
-        weather = NULL,
-        c10 = NULL,
-        c5 = NULL,
+        data = NULL,
         initial_cut_dates = NULL,
         set_cut_dates = NULL,
         date_ui_ready = FALSE,
@@ -31,15 +27,7 @@ timingServer <- function(loc_data) {
 
       # store incoming location data in rv
       observe({
-        rv$loc <- loc_data()$loc
-        rv$weather <- loc_data()$weather
-        rv$c10 <- loc_data()$c10
-        rv$c5 <- loc_data()$c5
-      })
-
-      # hide UI until a location is selected
-      observe({
-        if (!is.null(rv$loc)) rv$loc_ready <- TRUE
+        rv$data <- loc_data()
       })
 
       # determine initial cut timing based on gdd accumulation
@@ -62,7 +50,7 @@ timingServer <- function(loc_data) {
       ## Main UI ----
 
       output$main_ui <- renderUI({
-        validate(need(rv$loc_ready, OPTS$location_validation_msg))
+        validate(need(rv$data, OPTS$location_validation_msg))
 
         tagList(
           uiOutput(ns("options_ui")),
@@ -87,7 +75,7 @@ timingServer <- function(loc_data) {
                   choices = OPTS$weather_years
                 ),
                 radioButtons(
-                  ns("period"), "Climate data",
+                  ns("climate"), "Climate data",
                   choices = OPTS$climate_period_choices
                 )
               )
@@ -244,7 +232,7 @@ timingServer <- function(loc_data) {
       plot_data <- reactive({
         buildGrowthData(
           weather_data = req(rv$weather),
-          climate_data = req(rv[[req(input$period)]]),
+          climate_data = req(rv$data[[req(input$climate)]]),
           start_date = start_of_year(req(input$year))
         )
       })
@@ -259,7 +247,7 @@ timingServer <- function(loc_data) {
 
         buildTimingPlot(
           df = plot_data(),
-          loc = req(rv$loc),
+          loc = req(rv$data$loc),
           weather_year = req(input$year),
           cut_dates = cut_dates
         )

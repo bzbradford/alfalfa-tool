@@ -17,7 +17,7 @@ There are three types of charts, one focused on observed weather for this year a
 
 #### Frost and freeze methodology
 
-Spring and fall frost/freeze risk is calculated using climate averages and shown as either the probability of frost/freeze on a given day of year, or the cumulative probability that a frost/freeze will have occurred on or before that date (fall) or will not occur again after that date (spring). For instance, a cumulative killing freeze probability of 50% on Oct. 25 means that in the historical data used, half of those years saw a killing freeze on or before Oct. 25 and half did not. This can aid in setting your risk tolerance. Frost occurs when the daily minimum is below 32°F, hard freeze occurs when the minimum is below 28°F, and a killing freeze occurs when the minimum is below 24°F.
+Spring and fall frost/freeze risk is calculated using climate averages and shown as either the probability of frost/freeze on a given day of year, or the cumulative probability that the first frost/freeze will have occurred on or before that date in the fall or that the last frost has already occurred in the spring. For instance, a cumulative killing freeze probability of 50% on Oct. 25 means that in the historical data used, half of those years saw a killing freeze on or before Oct. 25 and half did not. This can aid in setting your risk tolerance. Frost occurs when the daily minimum is below 32°F, hard freeze occurs when the minimum is below 28°F, and a killing freeze occurs when the minimum is below 24°F.
 
 #### More information
 

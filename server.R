@@ -39,16 +39,18 @@ server <- function(input, output, session) {
   loc_data <- reactive({
     loc <- req(mapServerValues()$selected_grid)
 
-    list(
-      loc = loc,
-      weather = weather %>%
-        filter(lat == loc$lat, lng == loc$lng),
-      c10 = climate$c10 %>%
-        filter(lat == loc$lat, lng == loc$lng) %>%
-        mutate(date = start_of_year() + yday - 1, .after = yday),
-      c5 = climate$c5 %>%
+    cl <- lapply(climate, function(df) {
+      df %>%
         filter(lat == loc$lat, lng == loc$lng) %>%
         mutate(date = start_of_year() + yday - 1, .after = yday)
+    })
+
+    list(
+      loc = loc,
+      weather = weather %>% filter(lat == loc$lat, lng == loc$lng),
+      c30 = cl$c30,
+      c10 = cl$c10,
+      c5 = cl$c5
     )
   })
 

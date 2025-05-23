@@ -180,10 +180,13 @@ OPTS <- lst(
     "Climate averages" = "climate",
     "Weather vs climate" = "comparison"
   ),
-  climate_period_choices = list(
-    "10-year climate average (2014-2024)" = "c10",
-    "5-year climate average (2019-2024)" = "c5"
-  ),
+  climate_period_names = c("c30", "c10", "c5"),
+  climate_period_lengths = c("30-year", "10-year", "5-year") %>%
+    set_names(climate_period_names),
+  climate_period_ranges = c("1994-2024", "2014-2024", "2019-2024") %>%
+    set_names(climate_period_names),
+  climate_period_choices = climate_period_names %>%
+    set_names(sprintf("%s (%s)", climate_period_lengths, climate_period_ranges)),
   climate_frost_choices = list(
     "Frost (<32°F)" = "frost",
     "Hard freeze (<28°F)" = "freeze",
@@ -512,8 +515,9 @@ finalize_weather <- function(.data) {
 load_climate <- function() {
   if (!exists("climate")) {
     climate <<- list(
-      c5 = read_fst("data/climate_5yr.fst"),
-      c10 = read_fst("data/climate_10yr.fst")
+      c30 = read_fst("data/climate_30yr_1994_2024.fst"),
+      c10 = read_fst("data/climate_10yr_2014_2024.fst"),
+      c5 = read_fst("data/climate_5yr_2019_2024.fst")
     ) %>%
       lapply(as_tibble) %>%
       lapply(add_climate_cols)

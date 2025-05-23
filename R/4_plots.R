@@ -15,23 +15,18 @@ plotServer <- function(loc_data) {
       ns <- session$ns
 
       rv <- reactiveValues(
-        loc = NULL,
-        loc_ready = FALSE
+        data = NULL
       )
 
       observe({
-        rv$loc <- loc_data()$loc
-      })
-
-      observe({
-        if (!is.null(rv$loc)) rv$loc_ready <- TRUE
+        rv$data <- loc_data()
       })
 
 
       # Main UI ----
 
       output$main_ui <- renderUI({
-        validate(need(rv$loc_ready, OPTS$location_validation_msg))
+        validate(need(rv$data, OPTS$location_validation_msg))
 
         tagList(
           tabsetPanel(
@@ -85,7 +80,7 @@ plotServer <- function(loc_data) {
       ## weather_plot ----
       output$weather_plot <- renderPlotly({
         opts <- list(
-          loc = loc_data()$loc,
+          loc = rv$data$loc,
           year = req(input$weather_year),
           smoothing = req(input$weather_smoothing),
           gdd_type = req(input$weather_gdd)
@@ -96,7 +91,7 @@ plotServer <- function(loc_data) {
           },
           sprintf("Weather data for %.1f°N, %.1f°W", opts$loc$lat, opts$loc$lng)
         )
-        df <- loc_data()$weather
+        df <- rv$data$weather
 
         if (opts$year != "All") df <- filter(df, year == opts$year)
         df <- df %>% smooth_cols(opts$smoothing)
@@ -168,7 +163,7 @@ plotServer <- function(loc_data) {
       ## climate_plot ----
       output$climate_plot <- renderPlotly({
         opts <- list(
-          loc = loc_data()$loc,
+          loc = rv$data$loc,
           period = req(input$climate_period),
           frost = req(input$climate_frost),
           smoothing = req(input$climate_smoothing)
@@ -178,7 +173,7 @@ plotServer <- function(loc_data) {
           sprintf("data for %.1f°N, %.1f°W", opts$loc$lat, opts$loc$lng)
         )
 
-        df <- loc_data()[[opts$period]] %>%
+        df <- rv$data[[opts$period]] %>%
           smooth_cols(opts$smoothing) %>%
           mutate(date = start_of_year() + yday - 1)
 
@@ -303,7 +298,7 @@ plotServer <- function(loc_data) {
         type <- str_to_sentence(opts$data)
         info <- paste(c(
           if (opts$data == "climate") {
-            list(c10 = "10-year", c5 = "5-year")[[opts$period]]
+            OPTS$climate_period_lengths[[opts$period]]
           } else {
             opts$year
           },
@@ -341,7 +336,7 @@ plotServer <- function(loc_data) {
           elems$y2 <- "none"
         }
 
-        opts <- list(loc = req(rv$loc))
+        opts <- list(loc = req(rv$data$loc))
         opts$title <- sprintf("Weather/climate data for %.1f°N, %.1f°W", opts$loc$lat, opts$loc$lng)
 
         # base plot
@@ -387,12 +382,12 @@ plotServer <- function(loc_data) {
 
           # apply smoothing
           df <- if (opts$data == "weather") {
-            loc_data()$weather %>%
+            rv$data$weather %>%
               filter(year == opts$year) %>%
               mutate(date = start_of_year() + yday - 1) %>%
               smooth_cols(opts$smoothing)
           } else {
-            loc_data()[[opts$period]] %>% smooth_cols(opts$smoothing)
+            rv$data[[opts$period]] %>% smooth_cols(opts$smoothing)
           }
 
           # add traces

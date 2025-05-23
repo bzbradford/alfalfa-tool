@@ -18,28 +18,26 @@ growthServer <- function(loc_data) {
       # Reactive Values ----
 
       rv <- reactiveValues(
-        loc_ready = FALSE
+        data = NULL,
+        ready = FALSE
       )
 
       # assign incoming data
       observe({
-        rv$loc <- loc_data()$loc
-        rv$weather <- loc_data()$weather
-        rv$c10 <- loc_data()$c10
-        rv$c5 <- loc_data()$c5
+        rv$data <- loc_data()
       })
 
       # enables the main UI on location select
-      observe({
-        if (!is.null(rv$loc)) rv$loc_ready <- TRUE
-      })
+      # observe({
+      #   if (!is.null(rv$data)) rv$ready <- TRUE
+      # })
 
 
       # Interface ----
 
       ## main_ui ----
       output$main_ui <- renderUI({
-        validate(need(rv$loc_ready, OPTS$location_validation_msg))
+        validate(need(rv$data, OPTS$location_validation_msg))
 
         tagList(
           uiOutput(ns("options_ui")),
@@ -73,7 +71,7 @@ growthServer <- function(loc_data) {
             ),
             div(
               radioButtons(
-                ns("climate"), "GDD projection and freeze risk:",
+                ns("climate"), "Climate data:",
                 choices = OPTS$climate_period_choices
               )
             )
@@ -109,8 +107,8 @@ growthServer <- function(loc_data) {
       ## plot_data ----
       growth_data <- reactive({
         df <- buildGrowthData(
-          weather_data = req(rv$weather),
-          climate_data = req(rv[[req(input$climate)]]),
+          weather_data = req(rv$data$weather),
+          climate_data = req(rv$data[[req(input$climate)]]),
           start_date = req(input$cut_date)
         )
       })
@@ -118,7 +116,7 @@ growthServer <- function(loc_data) {
       plot_data <- reactive({
         buildGrowthPlot(
           df = growth_data(),
-          loc = req(rv$loc)
+          loc = req(rv$data$loc)
         )
       })
 

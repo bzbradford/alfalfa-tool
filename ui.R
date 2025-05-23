@@ -1,7 +1,7 @@
 #- ui.R -#
 
 ui <- navbarPage(
-  title = "Alfalfa Weather and Cutting Tool",
+  title = "Weather and Alfalfa Planning Tool",
   id = "navbar",
   theme = shinytheme("flatly"),
   # position = "fixed-top",
@@ -9,8 +9,8 @@ ui <- navbarPage(
   header = tagList(
     tags$head(
       tags$meta(charset = "UTF-8"),
-      tags$meta(name = "description", content = "A weather tool for scheduling alfalfa cutting and managing fall frost risk in Wisconsin and the Upper Midwest"),
-      tags$meta(name = "keywords", content = "uw, wisconsin, alfalfa, weather, frost, freeze, growing degree days, risk, tool"),
+      tags$meta(name = "description", content = "A tool for exploring weather and climate data, optimizing alfalfa cut timing, and managing frost risk in Wisconsin and the Upper Midwest"),
+      tags$meta(name = "keywords", content = "uw, wisconsin, madison, alfalfa, weather, frost, freeze, growing degree days, risk, tool"),
       tags$link(rel = "shortcut icon", href = "favicon.ico"),
       tags$link(rel = "stylesheet", type = "text/css", href = "style.css"),
       tags$script(src = "script.js"),
@@ -25,9 +25,9 @@ ui <- navbarPage(
     )
   ),
   tabPanel("Weather Map", icon = icon("map"), value = "map"),
+  tabPanel("Weather Charts", icon = icon("chart-line"), value = "charts"),
   tabPanel("Growth Projection", icon = icon("leaf"), value = "growth"),
   tabPanel("Season Planning", icon = icon("tractor"), value = "timing"),
-  tabPanel("Weather Charts", icon = icon("chart-line"), value = "charts"),
   tabPanel("Downloads", icon = icon("download"), value = "downloads"),
   tabPanel("About", icon = icon("question"), value = "about"),
   footer = tags$footer(
