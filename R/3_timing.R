@@ -231,7 +231,7 @@ timingServer <- function(loc_data) {
       # Plot data ----
       plot_data <- reactive({
         buildGrowthData(
-          weather_data = req(rv$weather),
+          weather_data = req(rv$data$weather),
           climate_data = req(rv$data[[req(input$climate)]]),
           start_date = start_of_year(req(input$year))
         )
