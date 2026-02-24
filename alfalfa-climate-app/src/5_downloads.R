@@ -30,7 +30,6 @@ downloadsServer <- function(grid_data, loc_data) {
         rv$loc_ready <- TRUE
       })
 
-
       # Grid download ----
 
       grid_csv_name <- reactive({
@@ -50,7 +49,7 @@ downloadsServer <- function(grid_data, loc_data) {
       })
 
       grid_csv_header <- reactive({
-        opts <- req(grid_data()$opts) %>% lapply(as.character)
+        opts <- req(grid_data()$opts) |> lapply(as.character)
         params <- list(
           "Map extent" = invert(OPTS$map_extent_choices)[[opts$extent]],
           "Map type" = invert(OPTS$map_type_choices)[[opts$type]],
@@ -61,7 +60,9 @@ downloadsServer <- function(grid_data, loc_data) {
           ),
           "Value" = opts$value_label,
           "Date" = opts$date,
-          "Moving average" = invert(OPTS$data_smoothing_choices)[[opts$smoothing]]
+          "Moving average" = invert(OPTS$data_smoothing_choices)[[
+            opts$smoothing
+          ]]
         )
         params <- paste0(names(params), ": ", params)
         params <- na.omit(params)
@@ -70,10 +71,10 @@ downloadsServer <- function(grid_data, loc_data) {
 
       grid_csv_content <- reactive({
         grid <- req(grid_data()$grid)
-        grid %>%
-          complete(crossing(lat, lng), fill = list(value = NA)) %>%
-          arrange(desc(lat), lng) %>%
-          select("lat\\lng" = lat, name = lng, value) %>%
+        grid |>
+          complete(crossing(lat, lng), fill = list(value = NA)) |>
+          arrange(desc(lat), lng) |>
+          select("lat\\lng" = lat, name = lng, value) |>
           pivot_wider()
       })
 
@@ -91,27 +92,46 @@ downloadsServer <- function(grid_data, loc_data) {
         }
       )
 
-
       # Location downloads ----
 
       loc_str <- reactive({
-        loc <- req(loc_data()$loc)
+        loc <- req(loc_data()[["loc"]])
         sprintf("%.1f°N, %.1f°W", loc$lat, loc$lng)
       })
 
       output$loc_download_ui <- renderUI({
         validate(need(rv$loc_ready, OPTS$location_validation_msg))
+        echo(climate_btn_names)
         tagList(
           p("Selected location:", loc_str()),
           div(
             style = "display: flex; flex-wrap: wrap; flex-direction: row; gap: 10px;",
             downloadButton(
               ns("loc_weather_csv"),
-              paste0("Weather (", min(OPTS$weather_years), "-", max(OPTS$weather_years), ")"),
+              paste0(
+                "Weather (",
+                min(OPTS$weather_years),
+                "-",
+                max(OPTS$weather_years),
+                ")"
+              ),
               class = "btn-sm"
             ),
-            downloadButton(ns("loc_c5_csv"), climate_btn_names$c5, class = "btn-sm"),
-            downloadButton(ns("loc_c10_csv"), climate_btn_names$c10, class = "btn-sm")
+            downloadButton(
+              ns("loc_c5_csv"),
+              climate_btn_names[["c5"]],
+              class = "btn-sm"
+            ),
+            downloadButton(
+              ns("loc_c10_csv"),
+              climate_btn_names[["c10"]],
+              class = "btn-sm"
+            ),
+            downloadButton(
+              ns("loc_c30_csv"),
+              climate_btn_names[["c30"]],
+              class = "btn-sm"
+            )
           )
         )
       })
@@ -122,7 +142,7 @@ downloadsServer <- function(grid_data, loc_data) {
           header <- bind_rows(
             tibble(name = paste0("Weather data for ", loc_str())),
             tibble(name = NA),
-            enframe(invert(OPTS$grid_cols$weather)) %>% unnest(value),
+            enframe(invert(OPTS$grid_cols$weather)) |> unnest(value),
             tibble(name = NA)
           )
           content <- loc_data()$weather
@@ -133,12 +153,16 @@ downloadsServer <- function(grid_data, loc_data) {
 
       climate_csv_handler <- function(period) {
         downloadHandler(
-          filename = function() paste0(period, "-year climate for ", loc_str(), ".csv"),
+          filename = function() {
+            paste0(period, "-year climate for ", loc_str(), ".csv")
+          },
           content = function(file) {
             header <- bind_rows(
-              tibble(name = paste0(period, "-year climate data for ", loc_str())),
+              tibble(
+                name = paste0(period, "-year climate data for ", loc_str())
+              ),
               tibble(name = NA),
-              enframe(invert(OPTS$grid_cols$climate)) %>% unnest(value),
+              enframe(invert(OPTS$grid_cols$climate)) |> unnest(value),
               tibble(name = NA)
             )
             content <- loc_data()[[paste0("c", period)]]
@@ -150,6 +174,7 @@ downloadsServer <- function(grid_data, loc_data) {
 
       output$loc_c5_csv <- climate_csv_handler(5)
       output$loc_c10_csv <- climate_csv_handler(10)
+      output$loc_c30_csv <- climate_csv_handler(30)
     }
   )
 }

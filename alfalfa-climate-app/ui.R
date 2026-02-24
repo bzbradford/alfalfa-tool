@@ -9,8 +9,14 @@ ui <- navbarPage(
   header = tagList(
     tags$head(
       tags$meta(charset = "UTF-8"),
-      tags$meta(name = "description", content = "A tool for exploring weather and climate data, optimizing alfalfa cut timing, and managing frost risk in Wisconsin and the Upper Midwest"),
-      tags$meta(name = "keywords", content = "uw, wisconsin, madison, alfalfa, weather, frost, freeze, growing degree days, risk, tool"),
+      tags$meta(
+        name = "description",
+        content = "A tool for exploring weather and climate data, optimizing alfalfa cut timing, and managing frost risk in Wisconsin and the Upper Midwest"
+      ),
+      tags$meta(
+        name = "keywords",
+        content = "uw, wisconsin, madison, alfalfa, weather, frost, freeze, growing degree days, risk, tool"
+      ),
       tags$link(rel = "shortcut icon", href = "favicon.ico"),
       tags$link(rel = "stylesheet", type = "text/css", href = "style.css"),
       tags$script(src = "script.js"),
@@ -38,15 +44,31 @@ ui <- navbarPage(
         class = "footer-credits",
         p(
           "App developed by",
-          a("Ben Bradford", href = "https://entomology.wisc.edu/directory/ben-bradford/", target = "_blank", .noWS = "after"),
+          a(
+            "Ben Bradford",
+            href = "https://entomology.wisc.edu/directory/ben-bradford/",
+            target = "_blank",
+            .noWS = "after"
+          ),
           ", UW-Madison Entomology",
           br(),
-          "Last updated:", format(file.info(".")$mtime, "%Y-%m-%d."),
-          a("View source code", href = "https://github.com/bzbradford/alfalfa-tool", target = "_blank", .noWS = "after"), ".",
+          "Last updated:",
+          format(file.info(".")$mtime, "%Y-%m-%d."),
+          a(
+            "View source code",
+            href = "https://github.com/bzbradford/alfalfa-tool",
+            target = "_blank",
+            .noWS = "after"
+          ),
+          ".",
         ),
         p(
           "Feedback welcome!",
-          a("Click here to take our survey.", href = "https://forms.gle/m4eh4kMkhLjENiEPA", target = "_blank")
+          a(
+            "Click here to take our survey.",
+            href = "https://forms.gle/m4eh4kMkhLjENiEPA",
+            target = "_blank"
+          )
         )
       ),
       div(

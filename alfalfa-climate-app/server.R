@@ -1,7 +1,6 @@
 #- server.R -#
 
 server <- function(input, output, session) {
-
   OPTS$weather_date_max <- yesterday()
   OPTS$climate_date_min <- start_of_year()
   OPTS$climate_date_max <- end_of_year()
@@ -22,7 +21,6 @@ server <- function(input, output, session) {
     )
   }
 
-
   # Reactive values ----
 
   rv <- reactiveValues(
@@ -40,14 +38,14 @@ server <- function(input, output, session) {
     loc <- req(mapServerValues()$selected_grid)
 
     cl <- lapply(climate, function(df) {
-      df %>%
-        filter(lat == loc$lat, lng == loc$lng) %>%
+      df |>
+        filter(lat == loc$lat, lng == loc$lng) |>
         mutate(date = start_of_year() + yday - 1, .after = yday)
     })
 
     list(
       loc = loc,
-      weather = weather %>% filter(lat == loc$lat, lng == loc$lng),
+      weather = weather |> filter(lat == loc$lat, lng == loc$lng),
       c30 = cl$c30,
       c10 = cl$c10,
       c5 = cl$c5
@@ -60,10 +58,11 @@ server <- function(input, output, session) {
     have_dates <- sort(unique(weather$date))
     diff <- setdiff(all_dates, have_dates)
     missing <- length(diff) > 0
-    if (missing) message("Missing dates: ", paste(as_date(diff), collapse = ", "))
+    if (missing) {
+      message("Missing dates: ", paste(as_date(diff), collapse = ", "))
+    }
     missing
   })
-
 
   # Initialize module servers ----
 
@@ -85,7 +84,6 @@ server <- function(input, output, session) {
     req(mapServerValues()$grid_data)
     rv$map_ready <- TRUE
   })
-
 
   # Main UI ----
 
@@ -109,7 +107,6 @@ server <- function(input, output, session) {
     req(weather_missing())
     div(style = "color: red; font-weight: bold;", OPTS$load_error_msg)
   })
-
 
   # Sidebar selector ----
 
@@ -162,7 +159,8 @@ server <- function(input, output, session) {
       if (tab != id) hide(tab) else show(tab)
     })
     #   # scroll to sidebar element on mobile view
-    runjs("if (window.innerWidth < 768) document.getElementById('sidebar_ui').scrollIntoView();")
+    runjs(
+      "if (window.innerWidth < 768) document.getElementById('sidebar_ui').scrollIntoView();"
+    )
   })
-
 }

@@ -32,7 +32,6 @@ growthServer <- function(loc_data) {
       #   if (!is.null(rv$data)) rv$ready <- TRUE
       # })
 
-
       # Interface ----
 
       ## main_ui ----
@@ -50,17 +49,24 @@ growthServer <- function(loc_data) {
       ## options_ui ----
       output$options_ui <- renderUI({
         btn <- function(id, label) {
-          actionButton(ns(id), label, class = "btn-sm", style = "height:35px; margin:5px;")
+          actionButton(
+            ns(id),
+            label,
+            class = "btn-sm",
+            style = "height:35px; margin:5px;"
+          )
         }
 
         div(
-          class = "well", style = "padding-bottom: 0px;",
+          class = "well",
+          style = "padding-bottom: 0px;",
           div(
             class = "inline-flex",
             div(
               div(tags$label("Date of last cut")),
               div(
-                class = "inline-flex", style = "gap: 5px;",
+                class = "inline-flex",
+                style = "gap: 5px;",
                 uiOutput(ns("date_ui")),
                 div(
                   btn("date_jan1", "Jan 1"),
@@ -71,7 +77,8 @@ growthServer <- function(loc_data) {
             ),
             div(
               radioButtons(
-                ns("climate"), "Climate data:",
+                ns("climate"),
+                "Climate data:",
                 choices = OPTS$climate_period_choices
               )
             )
@@ -103,7 +110,6 @@ growthServer <- function(loc_data) {
         updateDateInput(inputId = "cut_date", value = OPTS$growth_default_date)
       })
 
-
       ## plot_data ----
       growth_data <- reactive({
         df <- buildGrowthData(
@@ -134,8 +140,6 @@ growthServer <- function(loc_data) {
           buildGrowthInfo(df)
         )
       })
-
-
     } # end module
   )
 }

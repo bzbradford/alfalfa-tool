@@ -44,7 +44,6 @@ timingServer <- function(loc_data) {
         rv$initial_cut_dates <- start_of_year() + unique(days) - 1
       }
 
-
       # Interface ----
 
       ## Main UI ----
@@ -59,7 +58,6 @@ timingServer <- function(loc_data) {
         )
       })
 
-
       ## Options UI ----
 
       output$options_ui <- renderUI({
@@ -71,11 +69,13 @@ timingServer <- function(loc_data) {
               div(
                 class = "inline-flex",
                 radioButtons(
-                  ns("year"), "Year",
+                  ns("year"),
+                  "Year",
                   choices = OPTS$weather_years
                 ),
                 radioButtons(
-                  ns("climate"), "Climate data",
+                  ns("climate"),
+                  "Climate data",
                   choices = OPTS$climate_period_choices
                 )
               )
@@ -88,7 +88,6 @@ timingServer <- function(loc_data) {
           )
         )
       })
-
 
       ## Auto cut scheduling ----
 
@@ -104,7 +103,12 @@ timingServer <- function(loc_data) {
               selected = OPTS$cut_freq_default,
               width = "100px"
             ),
-            actionButton(ns("apply_cut_freq"), "Apply", class = "btn-sm", style = "height: 34px;")
+            actionButton(
+              ns("apply_cut_freq"),
+              "Apply",
+              class = "btn-sm",
+              style = "height: 34px;"
+            )
           )
         )
       })
@@ -116,7 +120,6 @@ timingServer <- function(loc_data) {
       observe({
         if (is.null(rv$initial_cut_dates)) schedule_cut_dates()
       })
-
 
       ## Cutting dates UI ----
 
@@ -136,10 +139,13 @@ timingServer <- function(loc_data) {
           id <- cut_date_id(i)
           elems <- list()
           elems$input <- dateInput(
-            inputId = ns(id), label = NULL,
-            min = min_date, max = max_date,
+            inputId = ns(id),
+            label = NULL,
+            min = min_date,
+            max = max_date,
             value = clamp(cut_dates[i], min_date, max_date),
-            format = "M d", width = "100px"
+            format = "M d",
+            width = "100px"
           )
           if (n_dates > 1) {
             elems$remove <- div(
@@ -152,8 +158,10 @@ timingServer <- function(loc_data) {
 
         btn <- function(id) {
           actionButton(
-            ns(id), icon("plus"),
-            class = "btn-sm", style = "height: 45px;",
+            ns(id),
+            icon("plus"),
+            class = "btn-sm",
+            style = "height: 45px;",
             disabled = length(inputs) == OPTS$max_cut_dates
           )
         }
@@ -163,10 +171,11 @@ timingServer <- function(loc_data) {
           btn("add_cut_before"),
           inputs,
           btn("add_cut_after"),
-          HTML("<script>Shiny.setInputValue('timing-date_ui_ready', true);</script>")
+          HTML(
+            "<script>Shiny.setInputValue('timing-date_ui_ready', true);</script>"
+          )
         )
       })
-
 
       ## Read and store cutting dates ----
 
@@ -184,7 +193,8 @@ timingServer <- function(loc_data) {
         n_dates <- length(req(rv$initial_cut_dates))
         dates <- sapply(1:n_dates, function(i) {
           req(input[[cut_date_id(i)]])
-        }) %>% as.Date()
+        }) |>
+          as.Date()
         if (!identical(dates, sort(dates))) {
           pause_date_reader()
           rv$initial_cut_dates <- dates
@@ -192,7 +202,6 @@ timingServer <- function(loc_data) {
           rv$set_cut_dates <- dates
         }
       })
-
 
       ## Handle adding/removing dates ----
 
@@ -227,7 +236,6 @@ timingServer <- function(loc_data) {
         })
       })
 
-
       # Plot data ----
       plot_data <- reactive({
         buildGrowthData(
@@ -236,7 +244,6 @@ timingServer <- function(loc_data) {
           start_date = start_of_year(req(input$year))
         )
       })
-
 
       # Plot ----
 
@@ -252,7 +259,6 @@ timingServer <- function(loc_data) {
           cut_dates = cut_dates
         )
       })
-
     } # end module
   )
 }

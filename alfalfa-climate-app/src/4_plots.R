@@ -3,7 +3,9 @@
 plotUI <- function() {
   ns <- NS("plot")
   tagList(
-    p("View detailed weather and climate charts for individual locations selected on the map."),
+    p(
+      "View detailed weather and climate charts for individual locations selected on the map."
+    ),
     uiOutput(ns("main_ui"))
   )
 }
@@ -22,7 +24,6 @@ plotServer <- function(loc_data) {
         rv$data <- loc_data()
       })
 
-
       # Main UI ----
 
       output$main_ui <- renderUI({
@@ -36,7 +37,6 @@ plotServer <- function(loc_data) {
           )
         )
       })
-
 
       # Weather plot ----
 
@@ -55,17 +55,20 @@ plotServer <- function(loc_data) {
               div(
                 class = "inline-flex",
                 radioButtons(
-                  ns("weather_year"), "Weather year",
+                  ns("weather_year"),
+                  "Weather year",
                   choices = choices$year,
                   inline = TRUE
                 ),
                 radioButtons(
-                  ns("weather_smoothing"), "Data smoothing options",
+                  ns("weather_smoothing"),
+                  "Data smoothing options",
                   choices = choices$smoothing,
                   inline = TRUE
                 ),
                 radioButtons(
-                  ns("weather_gdd"), "Show growing degree days",
+                  ns("weather_gdd"),
+                  "Show growing degree days",
                   choices = choices$gdd,
                   inline = TRUE
                 )
@@ -87,16 +90,22 @@ plotServer <- function(loc_data) {
         )
         opts$title <- paste(
           {
-            if (opts$year != "All") opts$year else paste(rev(OPTS$weather_years), collapse = "-")
+            if (opts$year != "All") {
+              opts$year
+            } else {
+              paste(rev(OPTS$weather_years), collapse = "-")
+            }
           },
           sprintf("Weather data for %.1f°N, %.1f°W", opts$loc$lat, opts$loc$lng)
         )
         df <- rv$data$weather
 
-        if (opts$year != "All") df <- filter(df, year == opts$year)
-        df <- df %>% smooth_cols(opts$smoothing)
+        if (opts$year != "All") {
+          df <- filter(df, year == opts$year)
+        }
+        df <- df |> smooth_cols(opts$smoothing)
 
-        plt <- plot_ly() %>%
+        plt <- plot_ly() |>
           layout(
             title = list(
               text = opts$title,
@@ -109,10 +118,13 @@ plotServer <- function(loc_data) {
             modebar = list(
               remove = list("pan", "select", "lasso", "zoom", "autoscale")
             )
-          ) %>%
+          ) |>
           config(
-            toImageButtonOptions = append(OPTS$plot_export_opts, list(filename = opts$title))
-          ) %>%
+            toImageButtonOptions = append(
+              OPTS$plot_export_opts,
+              list(filename = opts$title)
+            )
+          ) |>
           add_temp_traces(df, "y1")
 
         if (opts$gdd_type == "Cumulative") {
@@ -121,10 +133,11 @@ plotServer <- function(loc_data) {
           plt <- add_gdd_daily_traces(plt, df, "y2")
         }
 
-        if (opts$year == "All") opts$year <- cur_yr
-        plt %>% add_today(yr = opts$year, date_yr = opts$year)
+        if (opts$year == "All") {
+          opts$year <- cur_yr
+        }
+        plt |> add_today(yr = opts$year, date_yr = opts$year)
       })
-
 
       # Climate plot ----
 
@@ -137,17 +150,20 @@ plotServer <- function(loc_data) {
               div(
                 class = "inline-flex",
                 radioButtons(
-                  ns("climate_period"), "Climate dataset",
+                  ns("climate_period"),
+                  "Climate dataset",
                   choices = OPTS$climate_period_choices,
                   inline = TRUE
                 ),
                 radioButtons(
-                  ns("climate_frost"), "Frost threshold",
+                  ns("climate_frost"),
+                  "Frost threshold",
                   choices = OPTS$climate_frost_choices,
                   inline = TRUE
                 ),
                 radioButtons(
-                  ns("climate_smoothing"), "Data smoothing options",
+                  ns("climate_smoothing"),
+                  "Data smoothing options",
                   choices = OPTS$data_smoothing_choices,
                   selected = 7,
                   inline = TRUE
@@ -173,11 +189,11 @@ plotServer <- function(loc_data) {
           sprintf("data for %.1f°N, %.1f°W", opts$loc$lat, opts$loc$lng)
         )
 
-        df <- rv$data[[opts$period]] %>%
-          smooth_cols(opts$smoothing) %>%
+        df <- rv$data[[opts$period]] |>
+          smooth_cols(opts$smoothing) |>
           mutate(date = start_of_year() + yday - 1)
 
-        plt <- plot_ly() %>%
+        plt <- plot_ly() |>
           layout(
             title = list(
               text = opts$title,
@@ -190,7 +206,7 @@ plotServer <- function(loc_data) {
             modebar = list(
               remove = list("pan", "select", "lasso", "zoom", "autoscale")
             )
-          ) %>%
+          ) |>
           config(
             toImageButtonOptions = list(
               format = "png",
@@ -199,19 +215,18 @@ plotServer <- function(loc_data) {
               width = 1000,
               scale = 1.25
             )
-          ) %>%
-          add_today() %>%
+          ) |>
+          add_today() |>
           add_temp_traces(df, "y1")
 
         if (opts$frost == "frost") {
-          plt %>% add_frost_traces(df, "y2")
+          plt |> add_frost_traces(df, "y2")
         } else if (opts$frost == "freeze") {
-          plt %>% add_freeze_traces(df, "y2")
+          plt |> add_freeze_traces(df, "y2")
         } else if (opts$frost == "kill") {
-          plt %>% add_kill_traces(df, "y2")
+          plt |> add_kill_traces(df, "y2")
         }
       })
-
 
       # Custom plot ----
 
@@ -222,10 +237,12 @@ plotServer <- function(loc_data) {
             bsCollapsePanel(
               "Plot options",
               fluidRow(
-                column(6,
+                column(
+                  6,
                   style = "padding-bottom: 0px;",
                   selectInput(
-                    ns("y1_elems"), "Primary plot data",
+                    ns("y1_elems"),
+                    "Primary plot data",
                     choices = OPTS$custom_plot_elems,
                     width = "300px"
                   ),
@@ -234,7 +251,8 @@ plotServer <- function(loc_data) {
                 column(
                   6,
                   selectInput(
-                    ns("y2_elems"), "Secondary plot data",
+                    ns("y2_elems"),
+                    "Secondary plot data",
                     choices = append(
                       list("None" = "none"),
                       OPTS$custom_plot_elems
@@ -259,8 +277,14 @@ plotServer <- function(loc_data) {
           i <- list(
             elems = input[[id("elems")]],
             year = first(c(input[[id("year")]], first(OPTS$weather_years))),
-            period = first(c(input[[id("period")]], first(OPTS$climate_period_choices))),
-            smoothing = first(c(input[[id("smoothing")]], first(OPTS$data_smoothing_choices)))
+            period = first(c(
+              input[[id("period")]],
+              first(OPTS$climate_period_choices)
+            )),
+            smoothing = first(c(
+              input[[id("smoothing")]],
+              first(OPTS$data_smoothing_choices)
+            ))
           )
 
           if (i$elems == "none") {
@@ -271,20 +295,23 @@ plotServer <- function(loc_data) {
           elems <- list()
           if (grepl("weather", i$elems)) {
             elems$year <- selectInput(
-              ns(id("year")), "Weather year",
+              ns(id("year")),
+              "Weather year",
               choices = OPTS$weather_years,
               selected = i$year
             )
           } else {
             elems$period <- selectInput(
-              ns(id("period")), "Climate period",
+              ns(id("period")),
+              "Climate period",
               choices = OPTS$climate_period_choices,
               selected = i$period
             )
           }
 
           elems$smoothing <- selectInput(
-            ns(id("smoothing")), "Data smoothing",
+            ns(id("smoothing")),
+            "Data smoothing",
             choices = OPTS$data_smoothing_choices,
             selected = i$smoothing
           )
@@ -296,15 +323,20 @@ plotServer <- function(loc_data) {
       ## custom_plot ----
       make_trace_label <- function(opts) {
         type <- str_to_sentence(opts$data)
-        info <- paste(c(
-          if (opts$data == "climate") {
-            OPTS$climate_period_lengths[[opts$period]]
-          } else {
-            opts$year
-          },
-          if (opts$smoothing != 1) paste0(opts$smoothing, "-day")
-        ), collapse = ", ")
-        if (info != "") info <- paste0("(", info, ")")
+        info <- paste(
+          c(
+            if (opts$data == "climate") {
+              OPTS$climate_period_lengths[[opts$period]]
+            } else {
+              opts$year
+            },
+            if (opts$smoothing != 1) paste0(opts$smoothing, "-day")
+          ),
+          collapse = ", "
+        )
+        if (info != "") {
+          info <- paste0("(", info, ")")
+        }
         paste0(paste(type, info), ": ")
       }
 
@@ -314,33 +346,41 @@ plotServer <- function(loc_data) {
           y1 = req(input$y1_elems),
           y2 = req(input$y2_elems)
         )
-        i <- sapply(c("y1", "y2"), function(y) {
-          id <- function(e) paste0(y, "_", e)
-          i <- list(
-            data = str_split_1(elems[[y]], "_")[1],
-            traces = str_split_1(elems[[y]], "_")[2]
-          )
-          if (i$data == "none") {
-            return()
-          }
-          i$smoothing <- as.numeric(req(input[[id("smoothing")]]))
-          if (i$data == "weather") {
-            i$year <- req(input[[id("year")]])
-          } else {
-            i$period <- req(input[[id("period")]])
-          }
-          i
-        }, simplify = FALSE)
+        i <- sapply(
+          c("y1", "y2"),
+          function(y) {
+            id <- function(e) paste0(y, "_", e)
+            i <- list(
+              data = str_split_1(elems[[y]], "_")[1],
+              traces = str_split_1(elems[[y]], "_")[2]
+            )
+            if (i$data == "none") {
+              return()
+            }
+            i$smoothing <- as.numeric(req(input[[id("smoothing")]]))
+            if (i$data == "weather") {
+              i$year <- req(input[[id("year")]])
+            } else {
+              i$period <- req(input[[id("period")]])
+            }
+            i
+          },
+          simplify = FALSE
+        )
 
         if (identical(i$y1, i$y2)) {
           elems$y2 <- "none"
         }
 
         opts <- list(loc = req(rv$data$loc))
-        opts$title <- sprintf("Weather/climate data for %.1f°N, %.1f°W", opts$loc$lat, opts$loc$lng)
+        opts$title <- sprintf(
+          "Weather/climate data for %.1f°N, %.1f°W",
+          opts$loc$lat,
+          opts$loc$lng
+        )
 
         # base plot
-        plt <- plot_ly() %>%
+        plt <- plot_ly() |>
           layout(
             title = list(
               text = opts$title,
@@ -353,7 +393,7 @@ plotServer <- function(loc_data) {
             modebar = list(
               remove = list("pan", "select", "lasso", "zoom", "autoscale")
             )
-          ) %>%
+          ) |>
           config(
             toImageButtonOptions = list(
               format = "png",
@@ -366,7 +406,9 @@ plotServer <- function(loc_data) {
 
         # add traces as necessary
         for (axis in c("y1", "y2")) {
-          if (elems[[axis]] == "none") next
+          if (elems[[axis]] == "none") {
+            next
+          }
 
           opts <- i[[axis]]
           opts$dash <- FALSE
@@ -382,12 +424,12 @@ plotServer <- function(loc_data) {
 
           # apply smoothing
           df <- if (opts$data == "weather") {
-            rv$data$weather %>%
-              filter(year == opts$year) %>%
-              mutate(date = start_of_year() + yday - 1) %>%
+            rv$data$weather |>
+              filter(year == opts$year) |>
+              mutate(date = start_of_year() + yday - 1) |>
               smooth_cols(opts$smoothing)
           } else {
-            rv$data[[opts$period]] %>% smooth_cols(opts$smoothing)
+            rv$data[[opts$period]] |> smooth_cols(opts$smoothing)
           }
 
           # add traces
@@ -405,7 +447,7 @@ plotServer <- function(loc_data) {
             }
         }
 
-        plt %>% add_today(yr = coalesce(opts$year, ""))
+        plt |> add_today(yr = coalesce(opts$year, ""))
       })
     } # end module
   )

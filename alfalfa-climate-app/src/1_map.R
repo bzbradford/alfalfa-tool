@@ -36,7 +36,6 @@ mapServer <- function() {
     function(input, output, session) {
       ns <- session$ns
 
-
       # Reactive values ----
 
       rv <- reactiveValues(
@@ -52,14 +51,13 @@ mapServer <- function() {
         grid_pal = NULL
       )
 
-
       # SIDEBAR UI -------------------------------------------------------------
 
       ## Clear map grid on type change ----
       observeEvent(input$data_type, {
         req(input$data_type)
 
-        leafletProxy("map") %>% clearGroup(layers$grid)
+        leafletProxy("map") |> clearGroup(layers$grid)
       })
 
       ## Map extent UI ----
@@ -67,26 +65,26 @@ mapServer <- function() {
         choices <- OPTS$map_extent_choices
 
         radioGroupButtons(
-          ns("map_extent"), "Map extent",
+          ns("map_extent"),
+          "Map extent",
           choices = choices,
           selected = first(choices),
           size = "sm"
         )
       })
-
 
       ## Data type UI ----
       output$type_ui <- renderUI({
         choices <- OPTS$map_type_choices
 
         radioGroupButtons(
-          ns("data_type"), "Choose data layer",
+          ns("data_type"),
+          "Choose data layer",
           choices = choices,
           selected = first(choices),
           size = "sm"
         )
       })
-
 
       ## Year/Period options UI ----
       output$type_opts_ui <- renderUI({
@@ -95,18 +93,26 @@ mapServer <- function() {
         elems <- list()
         elems$weather <- if (type %in% c("weather", "comparison")) {
           radioGroupButtons(
-            ns("weather_year"), "Weather year",
+            ns("weather_year"),
+            "Weather year",
             choices = OPTS$weather_years,
-            selected = first_truthy(isolate(input$weather_year), as.character(cur_yr)),
+            selected = first_truthy(
+              isolate(input$weather_year),
+              as.character(cur_yr)
+            ),
             size = "sm"
           )
         }
         elems$climate <- if (type %in% c("climate", "comparison")) {
           choices <- OPTS$climate_period_choices
           radioGroupButtons(
-            ns("climate_period"), "Climate period",
+            ns("climate_period"),
+            "Climate period",
             choices = choices,
-            selected = first_truthy(isolate(input$climate_period), first(OPTS$climate_period_choices)),
+            selected = first_truthy(
+              isolate(input$climate_period),
+              first(OPTS$climate_period_choices)
+            ),
             size = "sm"
           )
         }
@@ -117,14 +123,15 @@ mapServer <- function() {
         )
       })
 
-
       ## Data value options UI ----
       output$value_ui <- renderUI({
-        elem <- switch(req(input$data_type),
+        elem <- switch(
+          req(input$data_type),
           "weather" = {
             choices <- OPTS$grid_cols$weather
             selectInput(
-              ns("weather_value"), "Display value",
+              ns("weather_value"),
+              "Display value",
               choices = choices,
               selected = coalesce(input$weather_value, first(choices))
             )
@@ -132,7 +139,8 @@ mapServer <- function() {
           "climate" = {
             choices <- OPTS$grid_cols$climate
             selectInput(
-              ns("climate_value"), "Display value",
+              ns("climate_value"),
+              "Display value",
               choices = choices,
               selected = coalesce(input$climate_value, first(choices))
             )
@@ -140,7 +148,8 @@ mapServer <- function() {
           "comparison" = {
             choices <- OPTS$grid_cols$comparison
             selectInput(
-              ns("comparison_value"), "Display value",
+              ns("comparison_value"),
+              "Display value",
               choices = choices,
               selected = coalesce(input$comparison_value, first(choices))
             )
@@ -162,14 +171,14 @@ mapServer <- function() {
         if (value %in% OPTS$smoothable_cols) {
           choices <- OPTS$data_smoothing_choices
           radioGroupButtons(
-            ns("smoothing"), "Data smoothing",
+            ns("smoothing"),
+            "Data smoothing",
             choices = choices,
             selected = first_truthy(isolate(input$smoothing), first(choices)),
             size = "sm"
           )
         }
       })
-
 
       ## Date selector UI ----
       output$date_slider_ui <- renderUI({
@@ -201,8 +210,8 @@ mapServer <- function() {
             opts$prev_dates$end,
             rev(opts$prev_weather_date)[1],
             yesterday()
-          ) %>%
-          align_dates(opts$min) %>%
+          ) |>
+          align_dates(opts$min) |>
           clamp(opts$min, opts$max)
         if (opts$value %in% OPTS$cumulative_cols) {
           opts$start_date <-
@@ -210,12 +219,14 @@ mapServer <- function() {
               opts$prev_dates$start,
               rev(opts$prev_weather_date)[2],
               opts$min
-            ) %>%
+            ) |>
             align_dates(opts$min)
         }
         sliderInput(
-          ns("weather_date"), "Date",
-          min = opts$min, max = opts$max,
+          ns("weather_date"),
+          "Date",
+          min = opts$min,
+          max = opts$max,
           value = as.Date(c(opts$start_date, opts$end_date)),
           timeFormat = OPTS$weather_date_fmt
         )
@@ -242,8 +253,8 @@ mapServer <- function() {
             rev(opts$prev_climate_date)[1],
             rev(opts$prev_weather_date)[1],
             yesterday()
-          ) %>%
-            align_dates(opts$min) %>%
+          ) |>
+            align_dates(opts$min) |>
             clamp(opts$min, opts$max)
           if (opts$value %in% OPTS$cumulative_cols) {
             opts$start_date <- coalesce(
@@ -251,24 +262,25 @@ mapServer <- function() {
               rev(opts$prev_climate_date)[2],
               rev(opts$prev_weather_date)[2],
               opts$min
-            ) %>%
+            ) |>
               align_dates(opts$min)
           }
         })
 
         sliderInput(
-          ns("climate_date"), "Date",
-          min = opts$min, max = opts$max,
+          ns("climate_date"),
+          "Date",
+          min = opts$min,
+          max = opts$max,
           value = as.Date(c(opts$start_date, opts$end_date)),
           timeFormat = OPTS$climate_date_fmt
         )
       })
 
-
       ### Debounced date values ----
 
-      # weather_date <- reactive(input$weather_date) %>% debounce(OPTS$debounce_ms)
-      # climate_date <- reactive(input$climate_date) %>% debounce(OPTS$debounce_ms)
+      # weather_date <- reactive(input$weather_date) |> debounce(OPTS$debounce_ms)
+      # climate_date <- reactive(input$climate_date) |> debounce(OPTS$debounce_ms)
 
       grid_date <- reactive({
         if (req(input$data_type) == "climate") {
@@ -276,7 +288,8 @@ mapServer <- function() {
         } else {
           input$weather_date
         }
-      }) %>% debounce(500)
+      }) |>
+        debounce(500)
 
       # store date slider values in rv
       observe({
@@ -295,7 +308,6 @@ mapServer <- function() {
         rv$date_set <- NULL
         rv$date_vals <- dates
       })
-
 
       ## Date adjustment buttons ----
 
@@ -343,7 +355,6 @@ mapServer <- function() {
         )
       })
 
-
       ## Manual gradient UI ----
 
       output$display_opts_ui <- renderUI({
@@ -352,7 +363,8 @@ mapServer <- function() {
           div(
             class = "map-display-opts",
             checkboxInput(
-              ns("legend_autoscale"), "Autoscale map legend",
+              ns("legend_autoscale"),
+              "Autoscale map legend",
               value = TRUE
             ),
             uiOutput(ns("legend_range"))
@@ -376,13 +388,15 @@ mapServer <- function() {
         div(
           style = opts$style,
           numericInput(
-            ns("legend_min"), "Gradient minimum",
+            ns("legend_min"),
+            "Gradient minimum",
             value = opts$min,
             step = .1,
             width = "150px"
           ),
           numericInput(
-            ns("legend_max"), "Gradient maximum",
+            ns("legend_max"),
+            "Gradient maximum",
             value = opts$max,
             step = .1,
             width = "150px"
@@ -390,17 +404,18 @@ mapServer <- function() {
         )
       })
 
-
       # MAP --------------------------------------------------------------------
 
       layers <- OPTS$map_layers
 
       fit_extent <- function(map, extent = first(OPTS$map_extent_choices)) {
         bounds <- OPTS$map_extent[[extent]]
-        map %>%
+        map |>
           fitBounds(
-            lat1 = bounds$lat[1], lat2 = bounds$lat[2],
-            lng1 = bounds$lng[1], lng2 = bounds$lng[2]
+            lat1 = bounds$lat[1],
+            lat2 = bounds$lat[2],
+            lng1 = bounds$lng[1],
+            lng2 = bounds$lng[2]
           )
       }
 
@@ -423,12 +438,17 @@ mapServer <- function() {
         div(class = "map-title", title)
       })
 
-
       ## Initialize map ----
 
       output$map <- renderLeaflet({
         # js buttons
-        js_for <- function(target) JS(paste0("function(btn, map) { Shiny.setInputValue('map-easy_btn', '", target, "', {priority: 'event'}); }"))
+        js_for <- function(target) {
+          JS(paste0(
+            "function(btn, map) { Shiny.setInputValue('map-easy_btn', '",
+            target,
+            "', {priority: 'event'}); }"
+          ))
+        }
         btn1 <- easyButton(
           title = "Show my location on the map",
           icon = "fa-location",
@@ -458,20 +478,20 @@ mapServer <- function() {
         }
 
         # render map
-        leaflet(options = leafletOptions(preferCanvas = T)) %>%
-          fit_extent() %>%
-          addBasemaps() %>%
-          addMapPane("counties", 410) %>%
-          addMapPane("grid", 420) %>%
-          addMapPane("selected_grid", 430) %>%
+        leaflet(options = leafletOptions(preferCanvas = T)) |>
+          fit_extent() |>
+          addBasemaps() |>
+          addMapPane("counties", 410) |>
+          addMapPane("grid", 420) |>
+          addMapPane("selected_grid", 430) |>
           addLayersControl(
             baseGroups = names(basemaps),
             overlayGroups = unlist(layers, use.names = F),
             options = layersControlOptions(collapsed = T)
-          ) %>%
-          addEasyButtonBar(btn1, btn2, btn3) %>%
+          ) |>
+          addEasyButtonBar(btn1, btn2, btn3) |>
           # assign leaflet map object to global var 'map'
-          htmlwidgets::onRender("() => { map = this; }") %>%
+          htmlwidgets::onRender("() => { map = this; }") |>
           suspendScroll(
             sleepTime = 0,
             wakeTime = 1000,
@@ -481,16 +501,15 @@ mapServer <- function() {
           )
       })
 
-
       ## Add counties to map ----
 
       observe({
         extent <- req(input$map_extent)
         map <- leafletProxy("map")
-        map %>% clearGroup(layers$counties)
+        map |> clearGroup(layers$counties)
 
         if (extent == "wi") {
-          map %>%
+          map |>
             addPolygons(
               data = counties_wi,
               group = layers$counties,
@@ -503,7 +522,7 @@ mapServer <- function() {
               options = pathOptions(pane = "counties")
             )
         } else {
-          map %>%
+          map |>
             addPolygons(
               data = counties_mw,
               group = layers$counties,
@@ -518,32 +537,38 @@ mapServer <- function() {
         }
       })
 
-
       ## Handle EasyButton clicks ----
 
       observeEvent(input$easy_btn, {
         btn <- req(input$easy_btn)
 
         if (btn == "user_loc") {
-          runjs("
+          runjs(
+            "
             map.getMap().locate({ setView: false }).on('locationfound', (event) => {
               Shiny.setInputValue('map-user_loc', event.latlng, {priority: 'event'})
             })
-          ")
+          "
+          )
         } else if (btn == "zoom_grid") {
           loc <- req(rv$selected_grid)
           runjs(paste0(
-            "map.getMap().setView([", loc$lat, ",", loc$lng, "], 10);"
+            "map.getMap().setView([",
+            loc$lat,
+            ",",
+            loc$lng,
+            "], 10);"
           ))
         } else if (btn == "zoom_extent") {
           extent <- req(input$map_extent)
           zoom <- if (extent == "wi") 7 else 6
           runjs(paste0(
-            "map.getMap().setView([45, -90], ", zoom, ");"
+            "map.getMap().setView([45, -90], ",
+            zoom,
+            ");"
           ))
         }
       })
-
 
       # MAP GRID ---------------------------------------------------------------
 
@@ -551,12 +576,16 @@ mapServer <- function() {
 
       # handle filtering by date for weather data
       prepare_weather_grid_data <- function(opts) {
-        df <- weather %>%
-          filter_by_extent(opts$extent) %>%
+        df <- weather |>
+          filter_by_extent(opts$extent) |>
           select(all_of(c("lat", "lng", "date", "value" = opts$col)))
         df1 <- if (opts$smoothing > 1 & (opts$col %in% OPTS$smoothable_cols)) {
-          df %>%
-            filter(between(date, opts$date[1] - opts$smoothing / 2, opts$date[1] + opts$smoothing / 2)) %>%
+          df |>
+            filter(between(
+              date,
+              opts$date[1] - opts$smoothing / 2,
+              opts$date[1] + opts$smoothing / 2
+            )) |>
             summarize(value = mean(value), .by = c(lat, lng))
         } else {
           filter(df, date == opts$date[1])
@@ -567,17 +596,23 @@ mapServer <- function() {
 
       # handle filtering by day of year for climate data
       prepare_climate_grid_data <- function(opts) {
-        df <- climate[[opts$period]] %>%
-          filter_by_extent(opts$extent) %>%
+        df <- climate[[opts$period]] |>
+          filter_by_extent(opts$extent) |>
           select(all_of(c("lat", "lng", "yday", "value" = opts$col)))
         df1 <- if (opts$smoothing > 1) {
-          df %>%
-            filter(between(yday, yday(opts$date[1] - opts$smoothing / 2), yday(opts$date[1] + opts$smoothing / 2))) %>%
+          df |>
+            filter(between(
+              yday,
+              yday(opts$date[1] - opts$smoothing / 2),
+              yday(opts$date[1] + opts$smoothing / 2)
+            )) |>
             summarize(value = mean(value), .by = c(lat, lng))
         } else {
-          df %>% filter(yday == yday(opts$date[1]))
+          df |> filter(yday == yday(opts$date[1]))
         }
-        df2 <- if (length(opts$date) == 2) df %>% filter(yday == yday(opts$date[2]))
+        df2 <- if (length(opts$date) == 2) {
+          df |> filter(yday == yday(opts$date[2]))
+        }
 
         prepare_grid_data(df1, df2, opts$col)
       }
@@ -585,13 +620,13 @@ mapServer <- function() {
       # returns a minimal dataset with lat, lng, and value cols
       prepare_grid_data <- function(df1, df2, col) {
         if (is.null(df2)) {
-          df1 %>%
+          df1 |>
             select(lat, lng, value)
         } else {
-          df1 <- df1 %>% select(lat, lng, value1 = value)
-          df2 <- df2 %>% select(lat, lng, value2 = value)
-          left_join(df1, df2, join_by(lat, lng)) %>%
-            mutate(value = value2 - value1) %>%
+          df1 <- df1 |> select(lat, lng, value1 = value)
+          df2 <- df2 |> select(lat, lng, value2 = value)
+          left_join(df1, df2, join_by(lat, lng)) |>
+            mutate(value = value2 - value1) |>
             select(lat, lng, value)
         }
       }
@@ -602,24 +637,31 @@ mapServer <- function() {
         cols <- OPTS$grid_cols[[opts$type]]
         prefix <- setNames(names(cols), cols)[[opts$col]]
 
-        .data %>% mutate(
-          label = paste0(
-            str_glue("<b>{lat}°N, {lng}°W</b>"),
-            {
-              if (selected) " (Selected)"
-            },
-            "<br>",
-            if (opts$type == "weather" & opts$col %in% c("frost", "freeze")) {
-              sprintf("%s: %s", prefix, value)
-            } else if (opts$col %in% OPTS$percent_cols) {
-              sprintf("%s: %.1f%%", prefix, value * 100)
-            } else if (opts$type == "comparison") {
-              sprintf("%s: %+.1f<br>Observed: %.1f, Average: %.1f", prefix, value, wx_value, cl_value)
-            } else {
-              sprintf("%s: %.1f", prefix, value)
-            }
+        .data |>
+          mutate(
+            label = paste0(
+              str_glue("<b>{lat}°N, {lng}°W</b>"),
+              {
+                if (selected) " (Selected)"
+              },
+              "<br>",
+              if (opts$type == "weather" & opts$col %in% c("frost", "freeze")) {
+                sprintf("%s: %s", prefix, value)
+              } else if (opts$col %in% OPTS$percent_cols) {
+                sprintf("%s: %.1f%%", prefix, value * 100)
+              } else if (opts$type == "comparison") {
+                sprintf(
+                  "%s: %+.1f<br>Observed: %.1f, Average: %.1f",
+                  prefix,
+                  value,
+                  wx_value,
+                  cl_value
+                )
+              } else {
+                sprintf("%s: %.1f", prefix, value)
+              }
+            )
           )
-        )
       }
 
       # create the palette domain
@@ -627,14 +669,17 @@ mapServer <- function() {
         signif(c(min_val, max_val), 3)
       }
 
-
       ## Set grid data and opts ----
       observe({
         opts <- list()
         opts$extent <- req(input$map_extent)
         opts$type <- req(input$data_type)
         opts$col <- req(input[[paste0(opts$type, "_value")]])
-        opts$smoothing <- ifelse(opts$col %in% OPTS$smoothable_cols, as.numeric(req(input$smoothing)), 1)
+        opts$smoothing <- ifelse(
+          opts$col %in% OPTS$smoothable_cols,
+          as.numeric(req(input$smoothing)),
+          1
+        )
         opts$date <- req(grid_date())
         date_len <- ifelse(opts$col %in% OPTS$cumulative_cols, 2, 1)
         req(length(opts$date) == date_len)
@@ -644,36 +689,45 @@ mapServer <- function() {
         }
 
         # set grid data
-        grid <- switch(opts$type,
+        grid <- switch(
+          opts$type,
           "weather" = prepare_weather_grid_data(opts),
           "climate" = prepare_climate_grid_data(opts),
           "comparison" = {
-            wx <- prepare_weather_grid_data(opts) %>% rename(c(wx_value = value))
-            cl <- prepare_climate_grid_data(opts) %>% rename(c(cl_value = value))
-            cl %>%
-              left_join(wx, join_by(lat, lng)) %>%
+            wx <- prepare_weather_grid_data(opts) |>
+              rename(c(wx_value = value))
+            cl <- prepare_climate_grid_data(opts) |>
+              rename(c(cl_value = value))
+            cl |>
+              left_join(wx, join_by(lat, lng)) |>
               mutate(value = wx_value - cl_value)
           }
         )
 
         # prepare grid labels
-        grid <- grid %>% mutate(
-          grid_str = sprintf("%.1f°N, %.1f°W", lat, lng),
-          value_str =
-            if (opts$type == "weather" & opts$col %in% c("frost", "freeze")) {
+        grid <- grid |>
+          mutate(
+            grid_str = sprintf("%.1f°N, %.1f°W", lat, lng),
+            value_str = if (
+              opts$type == "weather" & opts$col %in% c("frost", "freeze")
+            ) {
               sprintf("%s", value)
             } else if (opts$col %in% OPTS$percent_cols) {
               sprintf("%.1f%%", value * 100)
             } else if (opts$type == "comparison") {
-              sprintf("%+.1f<br>Observed: %.1f, Average: %.1f", value, wx_value, cl_value)
+              sprintf(
+                "%+.1f<br>Observed: %.1f, Average: %.1f",
+                value,
+                wx_value,
+                cl_value
+              )
             } else {
               sprintf("%.1f", value)
             }
-        )
+          )
 
         rv$grid_data <- list(grid = grid, opts = opts)
       })
-
 
       ## Set grid domain and palette ----
       observe({
@@ -688,9 +742,14 @@ mapServer <- function() {
         if (opts$col %in% OPTS$percent_cols) {
           opts$domain <- c(0, 1)
           opts$colors <- "Blues"
-        } else if (opts$type == "comparison" & opts$col %in% OPTS$comparison_cols) {
+        } else if (
+          opts$type == "comparison" & opts$col %in% OPTS$comparison_cols
+        ) {
           # +/- comparisons vs climate. Centered on zero
-          opts$domain <- create_domain(-max(abs(grid$value)), max(abs(grid$value)))
+          opts$domain <- create_domain(
+            -max(abs(grid$value)),
+            max(abs(grid$value))
+          )
           opts$colors <- "Spectral"
         } else {
           opts$domain <- create_domain(min(grid$value), max(grid$value))
@@ -712,7 +771,6 @@ mapServer <- function() {
         )
       })
 
-
       ## Draw grid on map ----
       observe({
         map <- leafletProxy(ns("map"))
@@ -733,34 +791,41 @@ mapServer <- function() {
         date_len <- ifelse(opts$col %in% OPTS$cumulative_cols, 2, 1)
         req(length(opts$date) == date_len)
 
-        grid <- grid %>%
-          mutate(pal_value = mapply(clamp, value, opts$domain[1], opts$domain[2])) %>%
+        grid <- grid |>
+          mutate(
+            pal_value = mapply(clamp, value, opts$domain[1], opts$domain[2])
+          ) |>
           mutate(fill = opts$pal(pal_value))
 
-        map %>%
+        map |>
           addRectangles(
             data = grid,
-            lat1 = ~ lat - .05, lat2 = ~ lat + .05,
-            lng1 = ~ lng - .05, lng2 = ~ lng + .05,
+            lat1 = ~ lat - .05,
+            lat2 = ~ lat + .05,
+            lng1 = ~ lng - .05,
+            lng2 = ~ lng + .05,
             group = layers$grid,
             layerId = ~ coords_to_pt(lat, lng),
             weight = 0,
             fillOpacity = .75,
             fillColor = ~fill,
-            label = ~ str_glue("<b>{grid_str}</b><br>{opts$value_label}: {value_str}") %>%
+            label = ~ str_glue(
+              "<b>{grid_str}</b><br>{opts$value_label}: {value_str}"
+            ) |>
               lapply(shiny::HTML),
             options = pathOptions(pane = "grid")
-          ) %>%
+          ) |>
           addLegend(
             layerId = "legend",
             position = "bottomright",
             pal = opts$pal_rev,
             bins = 5,
             values = opts$domain,
-            labFormat = labelFormat(transform = function(x) sort(x, decreasing = TRUE))
+            labFormat = labelFormat(transform = function(x) {
+              sort(x, decreasing = TRUE)
+            })
           )
       })
-
 
       # SELECTED GRID ----------------------------------------------------------
 
@@ -771,7 +836,7 @@ mapServer <- function() {
         if (in_extent(lat, lng, req(input$map_extent))) {
           rv$selected_grid <- list(lat = lat, lng = lng)
         }
-        # matching_grid <- req(rv$grid_data$grid) %>%
+        # matching_grid <- req(rv$grid_data$grid) |>
         #   filter(lat == new_lat, lng == new_lng)
         # if (nrow(matching_grid) > 0) {
         #   rv$selected_grid <- list(lat = new_lat, lng = new_lng)
@@ -793,20 +858,25 @@ mapServer <- function() {
         map <- leafletProxy(ns("map"))
         loc <- req(rv$selected_grid)
         opts <- req(rv$grid_data$opts)
-        grid <- req(rv$grid_data$grid) %>%
+        grid <- req(rv$grid_data$grid) |>
           filter(lat == loc$lat, lng == loc$lng)
 
         loc_str <- sprintf("%.1f°N, %.1f°W", loc$lat, loc$lng)
         value_str <- paste0(opts$value_label, ": ", grid$value_str)
-        control_str <- paste0("<b>Selected grid: ", loc_str, "</b><br>", value_str)
+        control_str <- paste0(
+          "<b>Selected grid: ",
+          loc_str,
+          "</b><br>",
+          value_str
+        )
         grid_str <- paste0("<b>", loc_str, " (selected)</b><br>", value_str)
 
-        map %>%
+        map |>
           addControl(
             control_str,
             position = "bottomleft",
             layerId = "selected_coords"
-          ) %>%
+          ) |>
           addRectangles(
             lat1 = loc$lat - .05,
             lat2 = loc$lat + .05,
@@ -823,7 +893,6 @@ mapServer <- function() {
           )
       })
 
-
       ## Handle user location ----
       # Add user location pin map after map zooms in
       observe({
@@ -831,41 +900,46 @@ mapServer <- function() {
 
         # center map on new location
         map <- leafletProxy(ns("map"))
-        map %>% setView(
-          lat = loc$lat,
-          lng = loc$lng,
-          zoom = 8
-        )
+        map |>
+          setView(
+            lat = loc$lat,
+            lng = loc$lng,
+            zoom = 8
+          )
 
         # select after delay for map panning
         delay(250, {
           select_grid(loc$lat, loc$lng)
-          map %>%
-            removeMarker("user_loc") %>%
+          map |>
+            removeMarker("user_loc") |>
             addMarkers(
-              lat = loc$lat, lng = loc$lng,
+              lat = loc$lat,
+              lng = loc$lng,
               layerId = "user_loc",
-              label = HTML(str_glue("
+              label = HTML(str_glue(
+                "
                 <b>Your location</b><br>
                 Latitude: {loc$lat}<br>
                 Longitude: {loc$lng}<br>
                 <i>Click to remove marker.</i>
-              "))
+              "
+              ))
             )
-          runjs("
+          runjs(
+            "
             document.getElementById('map-searchbox').value = '';
             document.getElementById('map-coord_search').value = '';
-          ")
+          "
+          )
         })
       })
 
       # hide location pin on click
       observeEvent(input$map_marker_click, {
         req(input$map_marker_click$id == "user_loc")
-        leafletProxy("map") %>%
+        leafletProxy("map") |>
           removeMarker("user_loc")
       })
-
 
       # LOWER UI ---------------------------------------------------------------
 
@@ -873,16 +947,16 @@ mapServer <- function() {
         extent <- req(input$map_extent)
         bounds <- OPTS$map_extent[[extent]]
 
-        leafletProxy("map") %>%
-          fit_extent(extent) %>%
+        leafletProxy("map") |>
+          fit_extent(extent) |>
           clearGroup(layers$grid)
 
         # move selection if now outside of extent
         if (!is.null(rv$selected_grid)) {
           loc <- rv$selected_grid
-          closest_grid <- climate_grids %>%
-            filter_by_extent(extent) %>%
-            slice_min(abs(lat - loc$lat), n = 1) %>%
+          closest_grid <- climate_grids |>
+            filter_by_extent(extent) |>
+            slice_min(abs(lat - loc$lat), n = 1) |>
             slice_min(abs(lng - loc$lng), n = 1)
           rv$selected_grid <- list(
             lat = closest_grid$lat,
@@ -898,24 +972,29 @@ mapServer <- function() {
         }
       })
 
-
       ## searchbox_ui ----
       output$searchbox_ui <- renderUI({
         div(
-          HTML(paste0("<script async src='https://maps.googleapis.com/maps/api/js?key=", google_key, "&loading=async&libraries=places&callback=initAutocomplete'></script>")),
+          HTML(paste0(
+            "<script async src='https://maps.googleapis.com/maps/api/js?key=",
+            google_key,
+            "&loading=async&libraries=places&callback=initAutocomplete'></script>"
+          )),
           textInput(ns("searchbox"), "Find a location by name")
         )
       })
 
       ## coord_search_ui ----
       output$coord_search_ui <- renderUI({
-        runjs('
+        runjs(
+          '
           $(document).keyup((event) => {
             if ($("#map-coord_search").is(":focus") && (event.key == "Enter")) {
               $("#map-coord_search_go").click();
             }
           });
-        ')
+        '
+        )
 
         div(
           div(tags$label("Find a location by coordinates")),
@@ -939,12 +1018,14 @@ mapServer <- function() {
         try({
           coords <- parse_coords(str)
           coord_hash <- paste0("{lat:", coords$lat, ", lng:", coords$lng, "}")
-          cmd <- paste0("Shiny.setInputValue('map-user_loc', ", coord_hash, ", {priority: 'event'})")
+          cmd <- paste0(
+            "Shiny.setInputValue('map-user_loc', ",
+            coord_hash,
+            ", {priority: 'event'})"
+          )
           runjs(cmd)
         })
       })
-
-
 
       # RETURN -----------------------------------------------------------------
 

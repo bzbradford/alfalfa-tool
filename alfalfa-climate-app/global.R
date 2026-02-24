@@ -1,24 +1,6 @@
 ## Alfalfa Weather Tool ##
 # Ben Bradford, UW-Madison
 
-
-#- Renv ----
-
-# renv::init()         # initiate renv if not already
-# renv::status()       # project status
-# renv::dependencies() # show project dependencies
-# renv::clean()        # remove unused packages
-# renv::update()       # update project libraries
-# renv::snapshot()     # save updated lock file to project
-# renv::restore()      # restore versions from lockfile
-
-
-#- Testing ----
-
-# shiny::devmode(TRUE)
-# shiny::devmode(FALSE)
-
-
 #- Dependencies ----
 
 suppressPackageStartupMessages({
@@ -41,9 +23,21 @@ suppressPackageStartupMessages({
   library(RColorBrewer)
 })
 
+# Dev
+if (FALSE) {
+  devtools::install_github("https://github.com/trafficonese/leaflet.extras")
+
+  renv::init() # initiate renv if not already
+  renv::status() # project status
+  renv::dependencies() # show project dependencies
+  renv::clean() # remove unused packages
+  renv::update() # update project libraries
+  renv::snapshot() # save updated lock file to project
+  renv::restore() # restore versions from lockfile
+}
+
 # allow bundle size > 1gb
 options(rsconnect.max.bundle.size = 5e9)
-
 
 # Utility functions -------------------------------------------------------
 
@@ -62,8 +56,10 @@ invert <- function(x) {
 
 # return the first truthy argument
 first_truthy <- function(...) {
-  for (arg in list(...)) if (shiny::isTruthy(arg)) {
-    return(arg)
+  for (arg in list(...)) {
+    if (shiny::isTruthy(arg)) {
+      return(arg)
+    }
   }
   NULL
 }
@@ -79,13 +75,17 @@ make_date <- function(y, m, d) {
 
 # accepts date or year
 start_of_year <- function(d = Sys.Date()) {
-  if (is.Date(d)) d <- year(d)
+  if (is.Date(d)) {
+    d <- year(d)
+  }
   make_date(d, 1, 1)
 }
 
 # accepts date or year
 end_of_year <- function(d = Sys.Date()) {
-  if (is.Date(d)) d <- year(d)
+  if (is.Date(d)) {
+    d <- year(d)
+  }
   make_date(d, 12, 31)
 }
 
@@ -94,24 +94,29 @@ align_dates <- function(target_date, ref_date) {
 }
 
 clamp <- function(x, left, right) {
-  if (is.null(x)) return(NULL)
+  if (is.null(x)) {
+    return(NULL)
+  }
   min(max(left, x), right)
 }
 
 vec_to_sentence <- function(vec) {
   vec <- as.character(vec)
   n <- length(vec)
-  if (n <= 1) return(vec)
-  if (n == 2) return(paste(vec, collapse = " and "))
+  if (n <= 1) {
+    return(vec)
+  }
+  if (n == 2) {
+    return(paste(vec, collapse = " and "))
+  }
   paste(c(paste(vec[1:(n - 1)], collapse = ", "), vec[n]), collapse = ", and ")
 }
-
 
 
 # Settings ----------------------------------------------------------------
 
 google_key <- Sys.getenv("google_places_key")
-# style <- read_file("www/style.css") %>% str_replace_all("[\r\n]", " ")
+# style <- read_file("www/style.css") |> str_replace_all("[\r\n]", " ")
 cur_yr <- year(yesterday())
 min_yr <- cur_yr - 2
 
@@ -181,12 +186,16 @@ OPTS <- lst(
     "Weather vs climate" = "comparison"
   ),
   climate_period_names = c("c30", "c10", "c5"),
-  climate_period_lengths = c("30-year", "10-year", "5-year") %>%
+  climate_period_lengths = c("30-year", "10-year", "5-year") |>
     set_names(climate_period_names),
-  climate_period_ranges = c("1994-2024", "2014-2024", "2019-2024") %>%
+  climate_period_ranges = c("1994-2024", "2014-2024", "2019-2024") |>
     set_names(climate_period_names),
-  climate_period_choices = climate_period_names %>%
-    set_names(sprintf("%s (%s)", climate_period_lengths, climate_period_ranges)),
+  climate_period_choices = climate_period_names |>
+    set_names(sprintf(
+      "%s (%s)",
+      climate_period_lengths,
+      climate_period_ranges
+    )),
   climate_frost_choices = list(
     "Frost (<32°F)" = "frost",
     "Hard freeze (<28°F)" = "freeze",
@@ -226,7 +235,8 @@ OPTS <- lst(
   plot_legend = list(
     orientation = "h",
     xanchor = "center",
-    x = .5, y = -.15
+    x = .5,
+    y = -.15
   ),
   plot_line_width = 1.5,
   plot_colors = list(
@@ -250,9 +260,28 @@ OPTS <- lst(
 
   # column defs
   cumulative_cols = c("gdd41cum", "gdd50cum"),
-  percent_cols = c("frost", "freeze", "kill", "frost_by", "freeze_by", "kill_by"),
+  percent_cols = c(
+    "frost",
+    "freeze",
+    "kill",
+    "frost_by",
+    "freeze_by",
+    "kill_by"
+  ),
   comparison_cols = c("min_temp", "max_temp", "mean_temp", "gdd41", "gdd50"),
-  smoothable_cols = c("min_temp", "max_temp", "mean_temp", "gdd41", "gdd50", "frost", "freeze", "kill", "frost_by", "freeze_by", "kill_by"),
+  smoothable_cols = c(
+    "min_temp",
+    "max_temp",
+    "mean_temp",
+    "gdd41",
+    "gdd50",
+    "frost",
+    "freeze",
+    "kill",
+    "frost_by",
+    "freeze_by",
+    "kill_by"
+  ),
 
   # column names
   grid_cols = list(
@@ -302,11 +331,16 @@ OPTS <- lst(
 )
 
 
-
 # Helper functions --------------------------------------------------------
 
 withSpinnerProxy <- function(ui, ...) {
-  ui %>% shinycssloaders::withSpinner(type = 8, color = "#30a67d", proxy.height = "400px", ...)
+  ui |>
+    shinycssloaders::withSpinner(
+      type = 8,
+      color = "#30a67d",
+      proxy.height = "400px",
+      ...
+    )
 }
 
 # returns the label associated with a grid type and value
@@ -316,13 +350,13 @@ get_col_label <- function(type, col) {
 
 # converts the incoming json coordinates in the form '[lat, lng]' to cols
 fix_coords <- function(df) {
-  df %>%
+  df |>
     mutate(
       name = gsub("\\[|\\]|\\s", "", name),
       lat = as.numeric(str_split_i(name, ",", 1)),
       lng = as.numeric(str_split_i(name, ",", 2)),
       .after = name
-    ) %>%
+    ) |>
     select(-name)
 }
 
@@ -347,7 +381,8 @@ in_extent <- function(lat, lng, extent) {
 # potentially supports multiple extents, but for now just 'wi' or everything
 filter_by_extent <- function(.data, extent = c("mw", "wi")) {
   extent <- match.arg(extent)
-  switch(extent,
+  switch(
+    extent,
     "mw" = .data,
     "wi" = filter(.data, in_extent(lat, lng, extent = "wi"))
   )
@@ -355,18 +390,22 @@ filter_by_extent <- function(.data, extent = c("mw", "wi")) {
 
 # convert coordinate string to named list
 parse_coords <- function(str) {
-  str <- str %>%
-    str_replace_all("[°NW]", "") %>%
-    str_squish() %>%
-    str_replace_all("[ ]+", ",") %>%
+  str <- str |>
+    str_replace_all("[°NW]", "") |>
+    str_squish() |>
+    str_replace_all("[ ]+", ",") |>
     str_replace_all("[,]+", ",")
   parts <- str_split_1(str, ",")
-  if (length(parts) < 2) stop("Invalid coordinate format.")
+  if (length(parts) < 2) {
+    stop("Invalid coordinate format.")
+  }
   coords <- suppressWarnings(list(
     lat = as.numeric(parts[1]),
     lng = as.numeric(parts[2])
   ))
-  if (any(sapply(coords, is.na))) stop("Failed to parse coordinates.")
+  if (any(sapply(coords, is.na))) {
+    stop("Failed to parse coordinates.")
+  }
   coords
 }
 
@@ -374,14 +413,13 @@ parse_coords <- function(str) {
 # parse_coords("45.12 -89.34")
 # parse_coords("foo bar")
 
-
 # generate derived climate data columns
 add_climate_cols <- function(.data) {
-  .data %>%
+  .data |>
     mutate(
       mean_temp = rowMeans(pick(min_temp, max_temp)),
       .after = max_temp
-    ) %>%
+    ) |>
     mutate(
       gdd41cum = cumsum(gdd41),
       gdd50cum = cumsum(gdd50),
@@ -393,13 +431,17 @@ add_climate_cols <- function(.data) {
 # apply rolling mean to appropriate columns
 smooth_cols <- function(.data, width, cols = OPTS$smoothable_cols) {
   width <- as.numeric(width)
-  if (width == 1) return(.data)
-  mutate(.data, across(
-    any_of(cols),
-    ~ zoo::rollapply(.x, width = width, FUN = mean, na.rm = T, partial = T)
-  ))
+  if (width == 1) {
+    return(.data)
+  }
+  mutate(
+    .data,
+    across(
+      any_of(cols),
+      ~ zoo::rollapply(.x, width = width, FUN = mean, na.rm = T, partial = T)
+    )
+  )
 }
-
 
 
 # Weather handling --------------------------------------------------------
@@ -412,28 +454,43 @@ smooth_cols <- function(.data, width, cols = OPTS$smoothable_cols) {
 #' @param base base/lower temperature threshold
 #' @returns single sine growing degree days for one day
 gdd_sine <- function(tmin, tmax, base) {
-  mapply(function(tmin, tmax, base) {
-    if (is.na(tmin) || is.na(tmax)) return(NA)
+  mapply(
+    function(tmin, tmax, base) {
+      if (is.na(tmin) || is.na(tmax)) {
+        return(NA)
+      }
 
-    # swap min and max if in wrong order for some reason
-    if (tmin > tmax) { t <- tmin; tmin <- tmax; tmax <- t }
+      # swap min and max if in wrong order for some reason
+      if (tmin > tmax) {
+        t <- tmin
+        tmin <- tmax
+        tmax <- t
+      }
 
-    # min and max < lower
-    if (tmax <= base) return(0)
+      # min and max < lower
+      if (tmax <= base) {
+        return(0)
+      }
 
-    average <- (tmin + tmax) / 2
+      average <- (tmin + tmax) / 2
 
-    # tmin > lower = simple average gdds
-    if (tmin >= base) return(average - base)
+      # tmin > lower = simple average gdds
+      if (tmin >= base) {
+        return(average - base)
+      }
 
-    # tmin < lower, tmax > lower = sine gdds
-    alpha <- (tmax - tmin) / 2
-    base_radians <- asin((base - average) / alpha)
-    a <- average - base
-    b <- pi / 2 - base_radians
-    c <- alpha * cos(base_radians)
-    (1 / pi) * (a * b + c)
-  }, tmin, tmax, base)
+      # tmin < lower, tmax > lower = sine gdds
+      alpha <- (tmax - tmin) / 2
+      base_radians <- asin((base - average) / alpha)
+      a <- average - base
+      b <- pi / 2 - base_radians
+      c <- alpha * cos(base_radians)
+      (1 / pi) * (a * b + c)
+    },
+    tmin,
+    tmax,
+    base
+  )
 }
 
 weather_dates <- function() {
@@ -447,28 +504,33 @@ get_weather_grid <- function(d = yesterday()) {
   url <- paste0("https://agweather.cals.wisc.edu/api/weather/grid?date=", d)
   message(d, " ==> GET ", url)
   wx <- tibble()
-  tryCatch({
-    resp <- request(url) %>%
-      req_perform() %>%
-      resp_body_json()
-    data <- resp$data %>%
-      enframe() %>%
-      unnest_wider("value")
-    if (nrow(data) == 0) stop()
-    wx <- data %>%
-      fix_coords() %>%
-      select(lat, lng, date, min_temp, max_temp) %>%
-      inner_join(climate_grids, join_by(lat, lng)) %>%
-      mutate(
-        date = as_date(d),
-        gdd86 = gdd_sine(min_temp, max_temp, 86),
-        gdd41 = round(gdd_sine(min_temp, max_temp, 41) - gdd86, 8),
-        gdd50 = round(gdd_sine(min_temp, max_temp, 50) - gdd86, 8)
-      ) %>%
-      select(-gdd86)
-  }, error = function(e) {
-    message(str_glue("Failed to retrieve weather data for {d}: {e}"))
-  })
+  tryCatch(
+    {
+      resp <- request(url) |>
+        req_perform() |>
+        resp_body_json()
+      data <- resp$data |>
+        enframe() |>
+        unnest_wider("value")
+      if (nrow(data) == 0) {
+        stop()
+      }
+      wx <- data |>
+        fix_coords() |>
+        select(lat, lng, date, min_temp, max_temp) |>
+        inner_join(climate_grids, join_by(lat, lng)) |>
+        mutate(
+          date = as_date(d),
+          gdd86 = gdd_sine(min_temp, max_temp, 86),
+          gdd41 = round(gdd_sine(min_temp, max_temp, 41) - gdd86, 8),
+          gdd50 = round(gdd_sine(min_temp, max_temp, 50) - gdd86, 8)
+        ) |>
+        select(-gdd86)
+    },
+    error = function(e) {
+      message(str_glue("Failed to retrieve weather data for {d}: {e}"))
+    }
+  )
   wx
 }
 
@@ -476,9 +538,11 @@ get_weather_grid <- function(d = yesterday()) {
 
 # remove duplicates if any
 validate_weather <- function() {
-  if (!exists("weather")) stop("Undefined")
-  weather <<- weather %>%
-    arrange(lat, lng, date) %>%
+  if (!exists("weather")) {
+    stop("Undefined")
+  }
+  weather <<- weather |>
+    arrange(lat, lng, date) |>
     distinct(lat, lng, date, .keep_all = TRUE)
 }
 
@@ -490,8 +554,8 @@ minimize_weather <- function(.data) {
 
 # build additional derived data columns
 finalize_weather <- function(.data) {
-  .data %>%
-    arrange(lat, lng, date) %>%
+  .data |>
+    arrange(lat, lng, date) |>
     mutate(
       year = year(date),
       yday = yday(date),
@@ -499,14 +563,13 @@ finalize_weather <- function(.data) {
       frost = min_temp <= 32,
       freeze = min_temp <= 28,
       kill = min_temp <= 24
-    ) %>%
+    ) |>
     mutate(
       gdd41cum = cumsum(gdd41),
       gdd50cum = cumsum(gdd50),
       .by = c(lat, lng, year)
     )
 }
-
 
 
 # Data loaders ------------------------------------------------------------
@@ -518,25 +581,29 @@ load_climate <- function() {
       c30 = read_fst("data/climate_30yr_1994_2024.fst"),
       c10 = read_fst("data/climate_10yr_2014_2024.fst"),
       c5 = read_fst("data/climate_5yr_2019_2024.fst")
-    ) %>%
-      lapply(as_tibble) %>%
+    ) |>
+      lapply(as_tibble) |>
       lapply(add_climate_cols)
   }
   if (!exists("climate_grids")) {
-    climate_grids <<- climate$c10 %>% distinct(lat, lng)
+    climate_grids <<- climate$c10 |> distinct(lat, lng)
   }
 }
 
 # load weather data into memory
 load_weather <- function() {
   files_need <- paste0("data/weather_", min_yr:cur_yr, ".fst")
-  files_have <- list.files(path = "data", pattern = "^weather_\\d{4}\\.fst$", full.names = T)
+  files_have <- list.files(
+    path = "data",
+    pattern = "^weather_\\d{4}\\.fst$",
+    full.names = T
+  )
   wx_files <- intersect(files_need, files_have)
   if (length(wx_files) > 0) {
     if (!exists("weather") || max(weather$date) != yesterday()) {
-      weather <<- wx_files %>%
-        lapply(read_fst) %>%
-        bind_rows() %>%
+      weather <<- wx_files |>
+        lapply(read_fst) |>
+        bind_rows() |>
         as_tibble()
     }
   }
@@ -544,18 +611,29 @@ load_weather <- function() {
 
 # get any missing weather data
 update_weather <- function(dates = weather_dates(), progress = FALSE) {
-  if (!exists("weather")) weather <<- tibble()
+  if (!exists("weather")) {
+    weather <<- tibble()
+  }
 
   # fetch new weather
   if (length(dates) > 0) {
     new_weather <- lapply(dates, function(d) {
-      if (progress) incProgress(1 / length(dates), message = "Updating weather...", detail = paste("Fetching", format(as_date(d), "%b %d, %Y")))
+      if (progress) {
+        incProgress(
+          1 / length(dates),
+          message = "Updating weather...",
+          detail = paste("Fetching", format(as_date(d), "%b %d, %Y"))
+        )
+      }
       get_weather_grid(d)
-    }) %>% bind_rows()
+    }) |>
+      bind_rows()
     weather <<- bind_rows(weather, new_weather)
   }
 
-  if (progress) incProgress(1, message = "Finalizing datasets...", detail = "")
+  if (progress) {
+    incProgress(1, message = "Finalizing datasets...", detail = "")
+  }
   weather <<- finalize_weather(weather)
   write_weather(weather, yrs = unique(year(dates)))
 }
@@ -563,14 +641,13 @@ update_weather <- function(dates = weather_dates(), progress = FALSE) {
 # save weather file(s) if updated
 write_weather <- function(wx, yrs = unique(wx$year)) {
   lapply(yrs, function(yr) {
-    wx %>%
-      filter(year == yr) %>%
-      minimize_weather() %>%
+    wx |>
+      filter(year == yr) |>
+      minimize_weather() |>
       write_fst(str_glue("data/weather_{yr}.fst"), compress = 99)
   })
   yrs
 }
-
 
 
 # Growth projection -------------------------------------------------------
@@ -581,57 +658,69 @@ write_weather <- function(wx, yrs = unique(wx$year)) {
 #' @param start_date start of growth projection
 #' @returns tibble
 buildGrowthData <- function(weather_data, climate_data, start_date) {
-  wx <- weather_data %>%
-    filter(date >= start_date) %>%
-    select(date, gdd41, kill) %>%
+  wx <- weather_data |>
+    filter(date >= start_date) |>
+    select(date, gdd41, kill) |>
     mutate(source = "weather")
 
-  cl <- climate_data %>%
+  cl <- climate_data |>
     select(yday, gdd41_cl = gdd41, kill_by)
 
   tibble(
     date = seq.Date(start_date, start_date + 365, 1),
     yday = yday(date)
-  ) %>%
-    left_join(wx, join_by(date)) %>%
-    left_join(cl, join_by(yday)) %>%
+  ) |>
+    left_join(wx, join_by(date)) |>
+    left_join(cl, join_by(yday)) |>
     mutate(
       gdd41 = coalesce(gdd41, gdd41_cl),
       gdd41cum = cumsum(gdd41),
       gdd41cum_cl = cumsum(gdd41_cl)
-    ) %>%
-    replace_na(list(source = "climate")) %>%
+    ) |>
+    replace_na(list(source = "climate")) |>
     # use the climate killing freeze probability to project kill events
-    mutate(kill = if_else(is.na(kill), kill_by >= .95, kill)) %>%
-    # mutate(kill = if_else(is.na(kill), (row_number() %% round(1 / kill_by) * 2) == 0, kill)) %>%
-    # mutate(kill = if_else(is.na(kill), kill_by > runif(length(kill_by)), kill)) %>%
-    mutate(last_kill = if_else(kill | row_number() == 1, date, NA)) %>%
-    fill(last_kill) %>%
-    mutate(gdd41 = if_else(kill, 0, gdd41)) %>%
+    mutate(kill = if_else(is.na(kill), kill_by >= .95, kill)) |>
+    # mutate(kill = if_else(is.na(kill), (row_number() %% round(1 / kill_by) * 2) == 0, kill)) |>
+    # mutate(kill = if_else(is.na(kill), kill_by > runif(length(kill_by)), kill)) |>
+    mutate(last_kill = if_else(kill | row_number() == 1, date, NA)) |>
+    fill(last_kill) |>
+    mutate(gdd41 = if_else(kill, 0, gdd41)) |>
     mutate(
       gdd_since_kill = cumsum(gdd41),
       days_since_kill = as.integer(date - last_kill),
       .by = last_kill
-    ) %>%
+    ) |>
     mutate(
       # spring and fall kill probability thresholds
       kill_annot = case_when(
-        (yday < 200) & (sign(lag(kill_by) - .1) != sign(kill_by - .1)) ~ "90% last kill<br>probability",
-        (yday >= 200) & (sign(lag(kill_by) - .5) != sign(kill_by - .5)) ~ "50% kill<br>probability"
+        (yday < 200) &
+          (sign(lag(kill_by) - .1) !=
+            sign(kill_by - .1)) ~ "90% last kill<br>probability",
+        (yday >= 200) &
+          (sign(lag(kill_by) - .5) !=
+            sign(kill_by - .5)) ~ "50% kill<br>probability"
       ),
       # identify first date after crossing growth thresholds
-      growth_threshold = do.call(case_when, lapply(
-        OPTS$growth_thresholds,
-        function(t) eval(parse(text = str_glue("sign(lag(gdd_since_kill) - {t}) < sign(gdd_since_kill - {t}) ~ {t}")))
-      ))
+      growth_threshold = do.call(
+        case_when,
+        lapply(
+          OPTS$growth_thresholds,
+          function(t) {
+            eval(parse(
+              text = str_glue(
+                "sign(lag(gdd_since_kill) - {t}) < sign(gdd_since_kill - {t}) ~ {t}"
+              )
+            ))
+          }
+        )
+      )
     )
 }
 
 # test_loc <- list(lat = 44.3, lng = -90.2)
-# test_wx <- weather %>% filter(lat == test_loc$lat, lng == test_loc$lng)
-# test_cl <- climate$c10 %>% filter(lat == test_loc$lat, lng == test_loc$lng)
+# test_wx <- weather |> filter(lat == test_loc$lat, lng == test_loc$lng)
+# test_cl <- climate$c10 |> filter(lat == test_loc$lat, lng == test_loc$lng)
 # test_growth_data <- buildGrowthData(test_wx, test_cl, as_date("2025-1-1"))
-
 
 #' Summarize growth data as text
 #' @param df data from `buildGrowthData` function
@@ -639,12 +728,13 @@ buildGrowthData <- function(weather_data, climate_data, start_date) {
 buildGrowthInfo <- function(df) {
   date_fmt <- ifelse(
     length(unique(year(df$date))) == 1,
-    "%b %e", "%b %d %Y"
+    "%b %e",
+    "%b %d %Y"
   )
-  growth <- df %>% drop_na(growth_threshold)
-  past <- growth %>% filter(date < today())
-  future <- growth %>% filter(date >= today())
-  max_growth <- df %>% slice_max(gdd_since_kill) %>% head(1)
+  growth <- df |> drop_na(growth_threshold)
+  past <- growth |> filter(date < today())
+  future <- growth |> filter(date >= today())
+  max_growth <- df |> slice_max(gdd_since_kill) |> head(1)
   str <- c(
     if (nrow(growth) == 0) {
       "Alfalfa did not or is not projected to reach any growth thresholds in the time shown."
@@ -652,13 +742,21 @@ buildGrowthInfo <- function(df) {
     if (nrow(past) > 0) {
       sprintf(
         "<b>Thresholds reached:</b> %s.",
-        vec_to_sentence(paste(past$growth_threshold, "gdd on", format(past$date, date_fmt)))
+        vec_to_sentence(paste(
+          past$growth_threshold,
+          "gdd on",
+          format(past$date, date_fmt)
+        ))
       )
     },
     if (nrow(future) > 0) {
       sprintf(
         "<b>Projected thresholds:</b> %s.",
-        vec_to_sentence(paste(future$growth_threshold, "gdd on", format(future$date, date_fmt)))
+        vec_to_sentence(paste(
+          future$growth_threshold,
+          "gdd on",
+          format(future$date, date_fmt)
+        ))
       )
     },
     sprintf(
@@ -674,47 +772,43 @@ buildGrowthInfo <- function(df) {
 
 # buildGrowthInfo(test_growth_data)
 
-
-
 # Initialize data ---------------------------------------------------------
 
-list.files("R", "*.R", full.names = T) %>% sapply(source)
+list.files("src", "*.R", full.names = TRUE) |> sapply(source)
 
 if (!exists("counties_wi")) {
-  counties_wi <- read_rds("data/counties_wi.rds") %>%
+  counties_wi <- read_rds("data/counties_wi.rds") |>
     mutate(
-      label = paste0("<b>", county, " County</b><br>", dnr_region) %>%
+      label = paste0("<b>", county, " County</b><br>", dnr_region) |>
         lapply(shiny::HTML)
     )
 }
 
 if (!exists("counties_mw")) {
-  counties_mw <- read_rds("data/counties_mw.rds") %>%
+  counties_mw <- read_rds("data/counties_mw.rds") |>
     mutate(
-      label = paste0("<b>", state, "</b><br>", county, " County") %>%
+      label = paste0("<b>", state, "</b><br>", county, " County") |>
         lapply(shiny::HTML)
     )
 }
 
-
-
 # Testing ----
 
 # delete some weather for testing
-# weather <- weather %>% filter(date < Sys.Date() - 1)
-# weather %>%
-#   filter(year == 2025) %>%
-#   minimize_weather() %>%
+# weather <- weather |> filter(date < Sys.Date() - 1)
+# weather |>
+#   filter(year == 2025) |>
+#   minimize_weather() |>
 #   write_fst("data/weather_2025.fst", compress = 99)
 
 # weather
 #
 # rbenchmark::benchmark(
 #   filter = {
-#     weather %>% filter(in_extent(lat, lng))
+#     weather |> filter(in_extent(lat, lng))
 #   },
 #   inwi = {
-#     weather %>% filter(inwi)
+#     weather |> filter(inwi)
 #   },
 #   replications = 1
 # )
