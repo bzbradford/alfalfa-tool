@@ -16,7 +16,8 @@ files = [
   '/server.R',
   '/src',
   '/ui.R',
-  '/www'
+  '/www',
+  '/.Renviron'
 ]
 title = 'Alfalfa Climate Tool'
 

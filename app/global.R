@@ -25,8 +25,6 @@ suppressPackageStartupMessages({
 
 # Dev
 if (FALSE) {
-  devtools::install_github("https://github.com/trafficonese/leaflet.extras")
-
   renv::init() # initiate renv if not already
   renv::status() # project status
   renv::dependencies() # show project dependencies

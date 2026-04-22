@@ -202,8 +202,8 @@ mapServer <- function() {
         opts$year <- req(input$weather_year)
         opts$value <- req(input[[paste0(opts$type, "_value")]])
         opts$min <- start_of_year(opts$year)
-        opts$max <- min(yesterday(), end_of_year(opts$year))
-        opts$prev_dates <- rv$date_vals
+        opts$max <- min(yesterday(), max(weather$date), end_of_year(opts$year))
+        opts$prev_dates <- first_truthy(rv$date_set, isolate(rv$date_vals))
         opts$prev_weather_date <- isolate(input$weather_date)
         opts$end_date <-
           coalesce(
@@ -296,6 +296,7 @@ mapServer <- function() {
         type <- req(input$data_type)
         dt <- req(grid_date())
         prev <- rv$date_vals
+        # prev <- rv$date_set
         dates <- list(start = NULL, end = NULL)
 
         dates <- if (length(dt) == 2) {
@@ -338,10 +339,11 @@ mapServer <- function() {
           start_of_year(cur_date),
           new_end_date
         )
-        rv$date_set <- list(
+        new_dates <- list(
           start = new_start_date,
           end = new_end_date
         )
+        rv$date_set <- new_dates
       }
 
       observeEvent(input$date_earlier_7, move_date(-7))
