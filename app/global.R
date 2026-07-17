@@ -142,9 +142,13 @@ OPTS <- lst(
       lng = c(-98, -82)
     )
   ),
+  # map_extent_choices = list(
+  #   "Upper Midwest" = "mw",
+  #   "Wisconsin" = "wi"
+  # ),
   map_extent_choices = list(
-    "Upper Midwest" = "mw",
-    "Wisconsin" = "wi"
+    "Wisconsin" = "wi",
+    "Upper Midwest" = "mw"
   ),
   basemaps = list(
     "ESRI Topo" = providers$Esri.WorldTopoMap,

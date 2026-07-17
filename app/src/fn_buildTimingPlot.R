@@ -2,7 +2,13 @@
 #' @param loc list with lat, lng
 #' @param year scheduling year
 #'
-buildTimingPlot <- function(df, loc, weather_year, cut_dates, held_ydays = NULL) {
+buildTimingPlot <- function(
+  df,
+  loc,
+  weather_year,
+  cut_dates,
+  held_ydays = NULL
+) {
   opts <- list()
   opts$title <- sprintf(
     "%s Alfalfa cutting schedule for %.1f°N, %.1f°W",
@@ -60,15 +66,16 @@ buildTimingPlot <- function(df, loc, weather_year, cut_dates, held_ydays = NULL)
     filter(kill, yday > 150) |>
     head(1) |>
     mutate(
-      label = paste0(
-        "<b>",
-        format(date, "%b %d"),
-        "</b><br>",
-        "First fall kill<br>",
-        days_since_cut,
-        " days<br>",
-        round(gdd_since_cut),
-        " GDD"
+      label = paste(
+        paste0("<b>", format(date, "%b %d"), "</b>"),
+        if_else(
+          source == "climate",
+          "50% kill date",
+          "First fall kill"
+        ),
+        paste(days_since_cut, "days"),
+        paste(round(gdd_since_cut), "GDD"),
+        sep = "<br>"
       )
     )
 
@@ -76,7 +83,7 @@ buildTimingPlot <- function(df, loc, weather_year, cut_dates, held_ydays = NULL)
   if (nrow(first_fall_kill) == 0) {
     dt <- df |>
       filter(yday > 200) |>
-      slice_min(abs(kill_by - .5)) |>
+      slice_min(abs(kill_by - 0.5)) |>
       pull(date)
     first_fall_kill <- df |>
       filter(date == first(dt)) |>

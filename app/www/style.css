@@ -158,6 +158,22 @@ a:focus {
 }
 
 
+/* CUT SCHEDULING MODULE */
+
+/* scheduling options */
+
+.cut-schedule-opts {
+  display: flex;
+  flex-direction: column;
+}
+
+.cut-schedule-opts>div {
+  flex: 1;
+  display: inline-flex;
+  gap: 20px;
+}
+
+
 /* scheduling date inputs */
 
 .date-btns {
@@ -180,11 +196,11 @@ a:focus {
 }
 
 .cut-date-container {
-  display: inline-flex;
-  flex: 1;
-  gap: 10px;
-  /* border: 2px solid hsl(205, 30%, 90%); */
-  /* background: hsl(205, 30%, 97%); */
+  display: flex;
+  flex-direction: column;
+  justify-content: end;
+  border: 2px solid hsl(205, 30%, 90%);
+  background: hsl(205, 30%, 97%);
   padding: 5px;
 }
 
@@ -192,14 +208,23 @@ a:focus {
   margin: 0;
 }
 
+.cut-date-header {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 5px;
+}
+
+.cut-date-number {
+  font-weight: bold;
+  font-size: 1.5rem;
+}
+
 .cut-date-controls {
   display: flex;
   justify-content: center;
   align-items: center;
   gap: 16px;
-  margin-top: 4px;
   font-size: 1rem;
-  line-height: 1;
 }
 
 .cut-date-controls .form-group,
