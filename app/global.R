@@ -174,7 +174,7 @@ OPTS <- lst(
   growth_thresholds = c(360, seq(800, 1200, by = 100)),
 
   # cut scheduling
-  max_cut_dates = 5,
+  max_cut_dates = 6,
   cut_freq_choices = seq(800, 1200, by = 100),
   cut_freq_default = 1000,
 

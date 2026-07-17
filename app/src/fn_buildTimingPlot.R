@@ -2,7 +2,7 @@
 #' @param loc list with lat, lng
 #' @param year scheduling year
 #'
-buildTimingPlot <- function(df, loc, weather_year, cut_dates) {
+buildTimingPlot <- function(df, loc, weather_year, cut_dates, held_ydays = NULL) {
   opts <- list()
   opts$title <- sprintf(
     "%s Alfalfa cutting schedule for %.1f°N, %.1f°W",
@@ -37,6 +37,7 @@ buildTimingPlot <- function(df, loc, weather_year, cut_dates) {
       label = paste0(
         "<b>",
         format(date, "%b %d"),
+        ifelse(yday(date) %in% held_ydays, " \U0001F512", ""),
         "</b><br>",
         days_since_cut,
         " days<br>",

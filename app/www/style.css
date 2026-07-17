@@ -1,14 +1,24 @@
 /* === ALFALFA WEATHER TOOL === */
 
+:root {
+  --bg-well: hsl(190, 18%, 93%);
+  --bg-nav: hsl(358, 95%, 30%);
+  --bg-nav-active: hsl(358, 95%, 40%);
+  --bg-nav-hover: hsl(358, 95%, 45%);
+
+}
+
 /*--- LAYOUT ---*/
 
 body {
   font-family: 'Lato', sans-serif;
-/*  padding-top: 70px;*/
+  /*  padding-top: 70px;*/
   min-height: 100vh;
 }
 
-a, a:hover, a:focus {
+a,
+a:hover,
+a:focus {
   color: #48a67b;
 }
 
@@ -33,33 +43,33 @@ a, a:hover, a:focus {
 
 .navbar-default {
   font-weight: bold;
-  background-color: hsl(358, 95%, 30%);
+  background-color: var(--bg-nav);
 }
 
 .navbar-default .navbar-brand:hover {
   color: #fff;
 }
 
-.navbar-default .navbar-nav > li > a {
-  background-color: hsl(358, 95%, 30%);
+.navbar-default .navbar-nav>li>a {
+  background-color: var(--bg-nav);
 }
 
-.navbar-default .navbar-nav > .active > a,
-.navbar-default .navbar-nav > .active > a:focus {
+.navbar-default .navbar-nav>.active>a,
+.navbar-default .navbar-nav>.active>a:focus {
   color: #fff;
-  background-color: hsl(358, 95%, 40%);
+  background-color: var(--bg-nav-active);
 }
 
-.navbar-default .navbar-nav > li > a:hover,
-.navbar-default .navbar-nav > .active > a:hover {
+.navbar-default .navbar-nav>li>a:hover,
+.navbar-default .navbar-nav>.active>a:hover {
   color: #fff;
-  background-color: hsl(358, 95%, 45%);
+  background-color: var(--bg-nav-hover);
 }
 
 .navbar-default .navbar-toggle,
 .navbar-default .navbar-toggle:hover,
 .navbar-default .navbar-toggle:focus {
-  background-color: hsl(358, 95%, 40%);
+  background-color: var(--bg-nav-active);
 }
 
 
@@ -86,11 +96,12 @@ a, a:hover, a:focus {
   font-style: italic;
 }
 
-@media only screen  and (max-width: 600px) {
+@media only screen and (max-width: 600px) {
   .footer-content {
     flex-direction: column;
     align-items: center;
   }
+
   .footer-credits {
     text-align: center;
   }
@@ -122,7 +133,7 @@ a, a:hover, a:focus {
   flex-wrap: wrap;
 }
 
-.inline-flex > * > .shiny-date-input {
+.inline-flex>*>.shiny-date-input {
   margin-bottom: 0;
 }
 
@@ -158,6 +169,87 @@ a, a:hover, a:focus {
 
 .date-btns button {
   padding: 5px 10px;
+}
+
+/* per-cut-date hold (lock) + remove (trash) icons */
+.cut-date-list {
+  display: flex;
+  flex-wrap: wrap;
+  flex-direction: row;
+  gap: 10px;
+}
+
+.cut-date-container {
+  display: inline-flex;
+  flex: 1;
+  gap: 10px;
+  /* border: 2px solid hsl(205, 30%, 90%); */
+  /* background: hsl(205, 30%, 97%); */
+  padding: 5px;
+}
+
+.cut-date-container .form-group {
+  margin: 0;
+}
+
+.cut-date-controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  margin-top: 4px;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.cut-date-controls .form-group,
+.cut-date-controls .checkbox {
+  margin: 0;
+  padding: 0;
+  min-height: 0;
+}
+
+.cut-date-controls .checkbox label {
+  align-content: center;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+/* hide the native checkbox; the lock icon is the toggle */
+.hold-toggle input {
+  display: none;
+}
+
+.hold-toggle .lock-off {
+  color: #888;
+}
+
+.hold-toggle .lock-on {
+  display: none;
+}
+
+.hold-toggle input:checked~span .lock-off {
+  display: none;
+}
+
+.hold-toggle input:checked~span .lock-on {
+  display: inline;
+  color: #30a67d;
+}
+
+.hold-toggle label:hover i {
+  color: #30a67d;
+}
+
+/* remove (trash) icon */
+.remove-cut {
+  color: #888;
+}
+
+.remove-cut:hover,
+.remove-cut:focus {
+  color: #c0392b;
 }
 
 
@@ -198,7 +290,7 @@ a, a:hover, a:focus {
 
 /* animate collapse arrow */
 
-.panel-title > a:before {
+.panel-title>a:before {
   display: inline-block;
   margin-right: 5px;
   content: '▼';
@@ -206,7 +298,7 @@ a, a:hover, a:focus {
   transform: rotate(-90deg);
 }
 
-.panel-title > a[aria-expanded=true]:before {
+.panel-title>a[aria-expanded=true]:before {
   transform: rotate(0);
 }
 
@@ -255,4 +347,3 @@ a, a:hover, a:focus {
   font-size: 16px;
   font-weight: bold;
 }
-
