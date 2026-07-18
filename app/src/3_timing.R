@@ -26,9 +26,6 @@ timingServer <- function(loc_data) {
         plot_export_ready = TRUE
       )
 
-      # observe(echo(rv$initial_cut_dates))
-      # observe(echo(rv$set_cut_dates))
-
       # store incoming location data in rv and reset schedule
       observe({
         rv$data <- loc_data()
@@ -86,8 +83,6 @@ timingServer <- function(loc_data) {
         cut_annot
       })
 
-      # observe(echo(cutting_summary()))
-
       # pick how many equal sub-intervals best match the target gdd interval,
       # leaning toward more (shorter) intervals on a tie so growers get more cuts
       best_divisions <- function(gdd_length, target) {
@@ -119,12 +114,10 @@ timingServer <- function(loc_data) {
         # cut, and the fall kill. Cuts are placed within the segments between them.
         held <- sort(rv$held)
 
-        echo(df)
         last_df <- df |>
           filter(yday > 180, date >= last_kill)
         possible_cut <- last_df |>
           filter(gdd_since_kill >= 800, between(kill_by, 0.1, 0.25))
-        echo(possible_cut)
         end_gdd <- if (nrow(possible_cut) > 0) {
           end_gdd <- min(possible_cut$gdd_since_kill)
         } else {
@@ -191,15 +184,11 @@ timingServer <- function(loc_data) {
         schedule_cut_dates(df, gdd_interval = gdd_freq)
       })
 
-      observe(echo(schedule_by_gdd()))
-
       schedule_by_cuts <- reactive({
         n_cuts <- req(input$cut_num)
         df <- plot_data()
         schedule_cut_dates(df, target = n_cuts)
       })
-
-      # observe(echo(schedule_by_cuts()))
 
       # Interface ----
 
@@ -350,8 +339,6 @@ timingServer <- function(loc_data) {
           req(input[[cut_date_id(i)]])
         }) |>
           as.Date()
-
-        echo(dates)
 
         # check that date inputs are in the right order
         sorted_dates <- sort(unique(dates))

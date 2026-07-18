@@ -101,7 +101,6 @@ downloadsServer <- function(grid_data, loc_data) {
 
       output$loc_download_ui <- renderUI({
         validate(need(rv$loc_ready, OPTS$location_validation_msg))
-        echo(climate_btn_names)
         tagList(
           p("Selected location:", loc_str()),
           div(

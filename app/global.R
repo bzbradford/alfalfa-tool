@@ -1,10 +1,17 @@
 ## Alfalfa Weather Tool ##
 # Ben Bradford, UW-Madison
 
+#' Annual update:
+#' Run climate data scripts in `/data-prep`
+#' Copy the 3 generated climate datasets into `app/data`
+#' Update the `OPTS$clim_opts` config below to reflect the new year
+
 #- Dependencies ----
 
 suppressPackageStartupMessages({
   library(tidyverse) # core
+  library(dtplyr)
+  library(data.table)
   library(sf) # spatial
   library(fst) # file storage
   library(httr2) # requests
@@ -32,16 +39,21 @@ if (FALSE) {
   renv::update() # update project libraries
   renv::snapshot() # save updated lock file to project
   renv::restore() # restore versions from lockfile
+
+  # newer won't compile on connect server
+  renv::install("sf@1.0-24")
+  renv::install("terra@1.9-11")
 }
 
 # allow bundle size > 1gb
 options(rsconnect.max.bundle.size = 5e9)
 
+
 # Utility functions -------------------------------------------------------
 
 # message and print an object to the console for testing
 echo <- function(x) {
-  message(deparse(substitute(x)), " <", typeof(x), ">")
+  message(deparse(substitute(x)), " <", paste(class(x), collapse = " | "), ">")
   print(x)
 }
 
@@ -187,17 +199,21 @@ OPTS <- lst(
     "Climate averages" = "climate",
     "Weather vs climate" = "comparison"
   ),
-  climate_period_names = c("c30", "c10", "c5"),
-  climate_period_lengths = c("30-year", "10-year", "5-year") |>
-    set_names(climate_period_names),
-  climate_period_ranges = c("1994-2024", "2014-2024", "2019-2024") |>
-    set_names(climate_period_names),
-  climate_period_choices = climate_period_names |>
-    set_names(sprintf(
-      "%s (%s)",
-      climate_period_lengths,
-      climate_period_ranges
-    )),
+
+  # climate
+  clim_opts = tibble(
+    max_yr = 2025,
+    len = c(30, 10, 5),
+    min_yr = max_yr - len,
+    id = paste0("c", len),
+    name = paste0(len, "-year"),
+    range = paste0(max_yr - len, "-", max_yr),
+    label = sprintf("%s (%s)", name, range),
+    file = str_glue("data/climate_{len}yr_{min_yr}_{max_yr}.fst")
+  ),
+  climate_period_lengths = set_names(clim_opts$name, clim_opts$id),
+  climate_period_ranges = set_names(clim_opts$range, clim_opts$id),
+  climate_period_choices = set_names(clim_opts$id, clim_opts$label),
   climate_frost_choices = list(
     "Frost (<32°F)" = "frost",
     "Hard freeze (<28°F)" = "freeze",
@@ -418,6 +434,7 @@ parse_coords <- function(str) {
 # generate derived climate data columns
 add_climate_cols <- function(.data) {
   .data |>
+    lazy_dt() |>
     mutate(
       mean_temp = rowMeans(pick(min_temp, max_temp)),
       .after = max_temp
@@ -427,7 +444,8 @@ add_climate_cols <- function(.data) {
       gdd50cum = cumsum(gdd50),
       .by = c(lat, lng),
       .after = gdd50
-    )
+    ) |>
+    as_tibble()
 }
 
 # apply rolling mean to appropriate columns
@@ -448,50 +466,41 @@ smooth_cols <- function(.data, width, cols = OPTS$smoothable_cols) {
 
 # Weather handling --------------------------------------------------------
 
-#' Single sine gdd calculation
+#' Single sine method
 #' to create GDDs with an upper threshold, calculate GDDs with the upper threshold
 #' as the base temperature and subtract that value from the GDDs for the base temp
 #' @param tmin minimum daily temperature
 #' @param tmax maximum daily temperature
 #' @param base base/lower temperature threshold
+#' @param upper upper temperature threshold
 #' @returns single sine growing degree days for one day
-gdd_sine <- function(tmin, tmax, base) {
-  mapply(
-    function(tmin, tmax, base) {
-      if (is.na(tmin) || is.na(tmax)) {
-        return(NA)
-      }
+gdd_sine <- function(tmin, tmax, base, upper = 150) {
+  tmin_adj <- pmin(tmin, tmax)
+  tmax_adj <- pmax(tmin, tmax)
 
-      # swap min and max if in wrong order for some reason
-      if (tmin > tmax) {
-        t <- tmin
-        tmin <- tmax
-        tmax <- t
-      }
+  avg <- (tmin_adj + tmax_adj) / 2
+  alpha <- (tmax_adj - tmin_adj) / 2
+  safe_alpha <- pmax(alpha, .Machine$double.eps)
 
-      # min and max < lower
-      if (tmax <= base) {
-        return(0)
-      }
+  base_rad <- asin(pmax(-1, pmin(1, (base - avg) / safe_alpha)))
+  upper_rad <- asin(pmax(-1, pmin(1, (upper - avg) / safe_alpha)))
 
-      average <- (tmin + tmax) / 2
+  val_simple <- avg - base
+  val_sine <- (1 / pi) *
+    ((avg - base) * (pi / 2 - base_rad) + alpha * cos(base_rad))
+  val_both <- (1 / pi) *
+    ((avg - base) *
+      (upper_rad - base_rad) +
+      alpha * (cos(base_rad) - cos(upper_rad)) +
+      (upper - base) * (pi / 2 - upper_rad))
 
-      # tmin > lower = simple average gdds
-      if (tmin >= base) {
-        return(average - base)
-      }
-
-      # tmin < lower, tmax > lower = sine gdds
-      alpha <- (tmax - tmin) / 2
-      base_radians <- asin((base - average) / alpha)
-      a <- average - base
-      b <- pi / 2 - base_radians
-      c <- alpha * cos(base_radians)
-      (1 / pi) * (a * b + c)
-    },
-    tmin,
-    tmax,
-    base
+  dplyr::case_when(
+    is.na(tmin) | is.na(tmax) ~ NA_real_,
+    tmax_adj <= base ~ 0,
+    tmin_adj >= upper ~ upper - base, # both thresholds exceeded
+    tmin_adj >= base ~ val_simple,
+    tmax_adj <= upper ~ val_sine,
+    TRUE ~ val_both
   )
 }
 
@@ -557,6 +566,7 @@ minimize_weather <- function(.data) {
 # build additional derived data columns
 finalize_weather <- function(.data) {
   .data |>
+    lazy_dt() |>
     arrange(lat, lng, date) |>
     mutate(
       year = year(date),
@@ -570,7 +580,8 @@ finalize_weather <- function(.data) {
       gdd41cum = cumsum(gdd41),
       gdd50cum = cumsum(gdd50),
       .by = c(lat, lng, year)
-    )
+    ) |>
+    as_tibble()
 }
 
 
@@ -579,13 +590,11 @@ finalize_weather <- function(.data) {
 # load climate data into memory
 load_climate <- function() {
   if (!exists("climate")) {
-    climate <<- list(
-      c30 = read_fst("data/climate_30yr_1994_2024.fst"),
-      c10 = read_fst("data/climate_10yr_2014_2024.fst"),
-      c5 = read_fst("data/climate_5yr_2019_2024.fst")
-    ) |>
+    opts <- OPTS$clim_opts
+    climate <<- lapply(opts$file, read_fst) |>
       lapply(as_tibble) |>
-      lapply(add_climate_cols)
+      lapply(add_climate_cols) |>
+      set_names(opts$id)
   }
   if (!exists("climate_grids")) {
     climate_grids <<- climate$c10 |> distinct(lat, lng)
@@ -719,10 +728,13 @@ buildGrowthData <- function(weather_data, climate_data, start_date) {
     )
 }
 
-# test_loc <- list(lat = 44.3, lng = -90.2)
-# test_wx <- weather |> filter(lat == test_loc$lat, lng == test_loc$lng)
-# test_cl <- climate$c10 |> filter(lat == test_loc$lat, lng == test_loc$lng)
-# test_growth_data <- buildGrowthData(test_wx, test_cl, as_date("2025-1-1"))
+if (FALSE) {
+  test_loc <- list(lat = 44.3, lng = -90.2)
+  test_wx <- weather |> filter(lat == test_loc$lat, lng == test_loc$lng)
+  test_cl <- climate$c10 |> filter(lat == test_loc$lat, lng == test_loc$lng)
+  test_growth_data <- buildGrowthData(test_wx, test_cl, as_date("2025-1-1"))
+}
+
 
 #' Summarize growth data as text
 #' @param df data from `buildGrowthData` function
@@ -774,7 +786,7 @@ buildGrowthInfo <- function(df) {
 
 # buildGrowthInfo(test_growth_data)
 
-# Initialize data ---------------------------------------------------------
+# Initialize data --------------------------------------------------------------
 
 list.files("src", "*.R", full.names = TRUE) |> sapply(source)
 
@@ -794,17 +806,17 @@ if (!exists("counties_mw")) {
     )
 }
 
-# Testing ----
+# Testing ----------------------------------------------------------------------
 
 # delete some weather for testing
-# weather <- weather |> filter(date < Sys.Date() - 1)
-# weather |>
-#   filter(year == 2025) |>
-#   minimize_weather() |>
-#   write_fst("data/weather_2025.fst", compress = 99)
+if (FALSE) {
+  weather <- weather |> filter(date < Sys.Date() - 1)
+  weather |>
+    filter(year == 2025) |>
+    minimize_weather() |>
+    write_fst("data/weather_2025.fst", compress = 99)
+}
 
-# weather
-#
 # rbenchmark::benchmark(
 #   filter = {
 #     weather |> filter(in_extent(lat, lng))
@@ -814,8 +826,7 @@ if (!exists("counties_mw")) {
 #   },
 #   replications = 1
 # )
-#
-#
+
 # rbenchmark::benchmark(
 #   climate = {
 #     load_climate()
