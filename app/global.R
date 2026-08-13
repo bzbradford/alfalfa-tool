@@ -41,8 +41,7 @@ if (FALSE) {
   renv::restore() # restore versions from lockfile
 
   # newer won't compile on connect server
-  renv::install("sf@1.0-24")
-  renv::install("terra@1.9-11")
+  renv::install("terra@1.9-27")
 }
 
 # allow bundle size > 1gb
